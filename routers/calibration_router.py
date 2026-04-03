@@ -1,11 +1,31 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from schemas.calibration_schema import *;
+from services.calibration_service import *;
+from storage.calibration_store import *;
 
 router = APIRouter(
-    prefix="/calibration",
+    prefix="/ai/calibration",
     tags=["calibration"]
 )
 
 
+calibration_store = CalibrationSessionStore()
+calibration_service = CalibrationService(calibration_store)
+
 @router.get("/ping")
 def calibration_ping():
     return {"message": "calibration router connected"}
+
+@router.post("/start",response_model=CalibrationStartResponse)
+def start_calibration(request:CalibrationStartRequest):
+    try:
+        return calibration_service.start_calibration(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+@router.get("/status/{calibrationSessionId}", response_model=CalibrationStatusResponse)
+def get_calibration(calibrationSessionId:str):
+    try:
+        return calibration_service.get_calibration_status(calibrationSessionId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
