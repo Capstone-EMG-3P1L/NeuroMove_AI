@@ -180,3 +180,6 @@ class CalibrationService:
             ),
         )
         
+    def _check_can_finish(self, step_counts: Dict[CalibrationStep, int]) -> bool:
+        required_count = 5
+        return all(count >= required_count for count in step_counts.values())
