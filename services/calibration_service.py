@@ -119,3 +119,64 @@ class CalibrationService:
             ),
         )
     
+    def finish_calibration(self,request: CalibrationFinishRequest,) -> CalibrationFinishResponse:
+        session = self.calibration_store.get_session(request.calibrationSessionId)
+        if session is None:
+            raise ValueError("calibration session not found")
+
+        if session.status == CalibrationStatus.COMPLETED:
+            raise ValueError("calibration session already completed")
+
+        step_window_counts = self.calibration_store.get_step_window_counts(
+            request.calibrationSessionId
+        )
+        if step_window_counts is None:
+            raise ValueError("failed to load step window counts")
+
+        can_finish = self._check_can_finish(step_window_counts)
+        if not can_finish:
+            raise ValueError("not enough calibration data to finish")
+
+        completed_at = int(time.time() * 1000)
+
+        # TODO:
+        # 나중에 실제 signal processing / feature extraction / threshold 계산 로직으로 교체
+        result = CalibrationResult(
+            baseline=BaselineResult(
+                ch1Mean=0.0,
+                ch1Std=0.0,
+                ch2Mean=0.0,
+                ch2Std=0.0,
+                ch3Mean=0.0,
+                ch3Std=0.0,
+            ),
+            activationThreshold=0.0,
+            intentThresholds={
+                CalibrationStep.LEFT: 0.0,
+                CalibrationStep.RIGHT: 0.0,
+                CalibrationStep.STOP: 0.0,
+            },
+            fatigueBaseline=0.0,
+            signalQuality=1.0,
+        )
+
+        completed_session = self.calibration_store.save_result(
+            request.calibrationSessionId,
+            result,
+            completed_at,
+        )
+        if completed_session is None:
+            raise ValueError("failed to save calibration result")
+
+        return CalibrationFinishResponse(
+            success=True,
+            message="calibration finished",
+            data=CalibrationFinishData(
+                calibrationSessionId=completed_session.calibrationSessionId,
+                userId=completed_session.userId,
+                deviceId=completed_session.deviceId,
+                result=completed_session.result,
+                completedAt=completed_session.completedAt,
+            ),
+        )
+        
