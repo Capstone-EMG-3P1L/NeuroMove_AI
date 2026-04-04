@@ -29,3 +29,11 @@ def get_calibration(calibrationSessionId:str):
         return calibration_service.get_calibration_status(calibrationSessionId)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@router.patch("/step", response_model=CalibrationStepUpdateResponse)
+def update_calibration_step(request: CalibrationStepUpdateRequest):
+    try:
+        return calibration_service.update_calibration_step(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
