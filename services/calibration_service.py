@@ -53,6 +53,7 @@ class CalibrationService:
                 calibrationSessionId=session.calibrationSessionId,
                 status=session.status,
                 currentStep=session.currentStep,
-                stepSampleCounts=step_sample_counts,
+                stepWindowCounts=step_window_counts,
+                can_finish = all(count > 0 for count in step_window_counts.values()) #기준 일단 임시로 정의
             ),
         )
