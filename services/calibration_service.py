@@ -89,7 +89,10 @@ class CalibrationService:
 
         if session.status == CalibrationStatus.COMPLETED:
             raise ValueError("calibration session already completed")
-
+        
+        # 시퀀스 넘버가 이전보다 작거나 같으면 안됨 -> 증가만 하면 OK 
+        # TODO:
+        #실제 시스템은 “연속성 체크 + gap 감지” 로 변경하도록
         if (
             session.lastSequenceNumber is not None
             and request.sequenceNumber <= session.lastSequenceNumber
