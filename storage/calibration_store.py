@@ -2,7 +2,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from schemas.calibration_schema import (
-    CalibrationRawSample,
+    CalibrationWindowRequest,
     CalibrationResult,
     CalibrationStatus,
     CalibrationStep,
@@ -12,10 +12,10 @@ from schemas.calibration_schema import (
 class CalibrationSession(BaseModel):
     calibrationSessionId: str
     userId: int
-    deviceUuid: str
+    deviceId: str
     status: CalibrationStatus = CalibrationStatus.READY
     currentStep: CalibrationStep = CalibrationStep.REST
-    stepBuffers: Dict[CalibrationStep, List[CalibrationRawSample]] = Field(
+    stepBuffers: Dict[CalibrationStep, List[CalibrationWindowRequest]] = Field(
         default_factory=lambda: {
             CalibrationStep.REST: [],
             CalibrationStep.LEFT: [],
@@ -23,6 +23,9 @@ class CalibrationSession(BaseModel):
             CalibrationStep.STOP: [],
         }
     )
+    lastSequenceNumber: Optional[int] = None
+    startedAt: int
+    completedAt: Optional[int] = None
     result: Optional[CalibrationResult] = None
 
     
@@ -56,7 +59,7 @@ class CalibrationSessionStore:
     def append_raw_data(
         self,
         calibration_session_id: str,
-        sample: CalibrationRawSample,
+        sample: CalibrationWindowRequest,
     ) -> Optional[CalibrationSession]:
         session = self.get_session(calibration_session_id)
         if session is None:
@@ -69,7 +72,7 @@ class CalibrationSessionStore:
 
         return session
 
-    def get_step_sample_counts(self, calibration_session_id: str) -> Optional[dict]:
+    def get_step_window_counts(self, calibration_session_id: str) -> Optional[dict]:
         session = self.get_session(calibration_session_id)
         if session is None:
             return None

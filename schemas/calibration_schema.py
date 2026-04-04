@@ -18,33 +18,39 @@ class CalibrationStatus(str, Enum):
     FAILED = "FAILED"
 
 
-class ChannelValues(BaseModel):
-    ch1: int = Field(..., description="Raw EMG value for channel 1")
-    ch2: int = Field(..., description="Raw EMG value for channel 2")
-    ch3: int = Field(..., description="Raw EMG value for channel 3")
+class ChannelWindow(BaseModel):
+    channelIndex: int = Field(..., description="Channel index (0,1,2)")
+    samples: List[int] = Field(..., description="Raw EMG samples for the channel")
 
 
-class CalibrationRawSample(BaseModel):
-    timestamp: int = Field(..., description="Measurement timestamp")
-    sequence: int = Field(..., description="Sequence number for packet ordering")
-    channels: ChannelValues
+class CalibrationWindowRequest(BaseModel):
+    calibrationSessionId: str
+    deviceId: str
+    sequenceNumber: int
+    timestamp: int
+    samplingRate: int
+    windowSize: int
+    channels: List[ChannelWindow]
 
 #Calibration 측정 시작
 class CalibrationStartRequest(BaseModel):
     calibrationSessionId: str
     userId: int
-    deviceUuid: str
+    deviceId: str
     initialStep: CalibrationStep = CalibrationStep.REST
 
 
 class CalibrationStartData(BaseModel):
     calibrationSessionId: str
-    currentStep: CalibrationStep
+    userId: str
+    deviceId: str
     status: CalibrationStatus
+    currentStep: CalibrationStep
+    startedAt: int
 
 
 class CalibrationStartResponse(BaseModel):
-    accepted: bool
+    success: bool
     message: str
     data: CalibrationStartData
 
@@ -60,26 +66,28 @@ class CalibrationStepUpdateData(BaseModel):
 
 
 class CalibrationStepUpdateResponse(BaseModel):
-    accepted: bool
+    success: bool
     message: str
     data: CalibrationStepUpdateData
 
 # EMG 센서에 측정되는 값 받기(esp32 보드)
 class CalibrationDataRequest(BaseModel):
     calibrationSessionId: str
+    deviceId: str
+    sequenceNumber: int
     timestamp: int
-    sequence: int
-    channels: ChannelValues
+    samplingRate: int
+    windowSize: int
+    channels: List[ChannelWindow]
 
-
+    
 class CalibrationDataResponseData(BaseModel):
     calibrationSessionId: str
     currentStep: CalibrationStep
-    bufferedCount: int
-
+    stepWindowCounts: Dict[CalibrationStep, int]
 
 class CalibrationDataResponse(BaseModel):
-    accepted: bool
+    success: bool
     message: str
     data: CalibrationDataResponseData
 
@@ -89,10 +97,11 @@ class CalibrationStatusData(BaseModel):
     status: CalibrationStatus
     currentStep: CalibrationStep
     stepSampleCounts: Dict[CalibrationStep, int]
+    canFinish: bool
 
 
 class CalibrationStatusResponse(BaseModel):
-    accepted: bool
+    success: bool
     message: str
     data: CalibrationStatusData
 
@@ -120,11 +129,13 @@ class CalibrationFinishRequest(BaseModel):
 
 class CalibrationFinishData(BaseModel):
     calibrationSessionId: str
-    status: CalibrationStatus
+    userId: str
+    deviceId: str
     result: CalibrationResult
+    completedAt: int
 
 
 class CalibrationFinishResponse(BaseModel):
-    accepted: bool
+    success: bool
     message: str
     data: CalibrationFinishData
