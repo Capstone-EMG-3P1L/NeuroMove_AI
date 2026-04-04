@@ -42,7 +42,7 @@ class CalibrationStartRequest(BaseModel):
 
 class CalibrationStartData(BaseModel):
     calibrationSessionId: str
-    userId: str
+    userId: int
     deviceId: str
     status: CalibrationStatus
     currentStep: CalibrationStep
@@ -129,7 +129,7 @@ class CalibrationFinishRequest(BaseModel):
 
 class CalibrationFinishData(BaseModel):
     calibrationSessionId: str
-    userId: str
+    userId: int
     deviceId: str
     result: CalibrationResult
     completedAt: int
