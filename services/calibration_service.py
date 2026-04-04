@@ -56,7 +56,7 @@ class CalibrationService:
                 stepWindowCounts=step_window_counts,
                 can_finish = all(count > 0 for count in step_window_counts.values()) #기준 일단 임시로 정의
             ),
-        )        )
+        )
     
     def update_calibration_step(self,request: CalibrationStepUpdateRequest,) -> CalibrationStepUpdateResponse:
         session = self.calibration_store.get_session(request.calibrationSessionId)
@@ -79,6 +79,43 @@ class CalibrationService:
             data=CalibrationStepUpdateData(
                 calibrationSessionId=updated_session.calibrationSessionId,
                 currentStep=updated_session.currentStep,
+            ),
+        )
+    
+    def append_calibration_data(self,request: CalibrationDataRequest,) -> CalibrationDataResponse:
+        session = self.calibration_store.get_session(request.calibrationSessionId)
+        if session is None:
+            raise ValueError("calibration session not found")
+
+        if session.status == CalibrationStatus.COMPLETED:
+            raise ValueError("calibration session already completed")
+
+        if (
+            session.lastSequenceNumber is not None
+            and request.sequenceNumber <= session.lastSequenceNumber
+        ):
+            raise ValueError("invalid sequence number")
+
+        updated_session = self.calibration_store.append_raw_data(
+            request.calibrationSessionId,
+            request,
+        )
+        if updated_session is None:
+            raise ValueError("failed to append calibration data")
+
+        step_window_counts = self.calibration_store.get_step_window_counts(
+            request.calibrationSessionId
+        )
+        if step_window_counts is None:
+            raise ValueError("failed to load step window counts")
+
+        return CalibrationDataResponse(
+            success=True,
+            message="calibration data appended",
+            data=CalibrationDataResponseData(
+                calibrationSessionId=updated_session.calibrationSessionId,
+                currentStep=updated_session.currentStep,
+                stepWindowCounts=step_window_counts,
             ),
         )
     
