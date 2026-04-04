@@ -96,7 +96,7 @@ class CalibrationStatusData(BaseModel):
     calibrationSessionId: str
     status: CalibrationStatus
     currentStep: CalibrationStep
-    stepSampleCounts: Dict[CalibrationStep, int]
+    stepWindowCounts: Dict[CalibrationStep, int]
     canFinish: bool
 
 
