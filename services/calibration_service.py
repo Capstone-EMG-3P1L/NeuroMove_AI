@@ -33,7 +33,7 @@ class CalibrationService:
                 deviceId=session.deviceId,
                 status=session.status,
                 currentStep=session.currentStep,
-                status=session.status,
+                startedAt=session.startedAt,
             ),
         )
 
@@ -54,7 +54,7 @@ class CalibrationService:
                 status=session.status,
                 currentStep=session.currentStep,
                 stepWindowCounts=step_window_counts,
-                can_finish = all(count > 0 for count in step_window_counts.values()) #기준 일단 임시로 정의
+                canFinish = all(count > 0 for count in step_window_counts.values()) #기준 일단 임시로 정의
             ),
         )
     
