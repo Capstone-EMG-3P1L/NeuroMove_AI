@@ -1,5 +1,8 @@
 from schemas.calibration_schema import *;
 from storage.calibration_store import *;
+import time
+from typing import Dict
+
 
 class CalibrationService:
     def __init__(self, calibration_store: CalibrationSessionStore):
@@ -9,20 +12,26 @@ class CalibrationService:
         if self.calibration_store.exists(request.calibrationSessionId):
             raise ValueError("calibration session already exists")
 
+        started_at = int(time.time()*1000)
+        
         session = CalibrationSession(
             calibrationSessionId=request.calibrationSessionId,
             userId=request.userId,
-            deviceUuid=request.deviceUuid,
+            deviceId=request.deviceId,
             currentStep=request.initialStep,
+            startedAt=started_at,
         )
 
         self.calibration_store.create_session(session)
 
         return CalibrationStartResponse(
-            accepted=True,
+            success=True,
             message="calibration session created",
             data=CalibrationStartData(
                 calibrationSessionId=session.calibrationSessionId,
+                userId=session.userId,
+                deviceId=session.deviceId,
+                status=session.status,
                 currentStep=session.currentStep,
                 status=session.status,
             ),
@@ -33,12 +42,12 @@ class CalibrationService:
         if session is None:
             raise ValueError("calibration session not found")
 
-        step_sample_counts = self.calibration_store.get_step_sample_counts(
+        step_window_counts = self.calibration_store.get_step_window_counts(
             calibration_session_id
         )
 
         return CalibrationStatusResponse(
-            accepted=True,
+            success=True,
             message="calibration status fetched",
             data=CalibrationStatusData(
                 calibrationSessionId=session.calibrationSessionId,
