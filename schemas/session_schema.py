@@ -17,13 +17,17 @@ class SessionStartRequest(BaseModel):
     deviceId: str
 
 
-class SessionStartData(BaseModel):
+class SessionBaseData(BaseModel):
     sessionId: str
     userId: int
     deviceId: str
     status: SessionStatus
     createdAt: int
     lastActivityAt: int
+
+
+class SessionStartData(SessionBaseData):
+    pass
 
 
 class SessionStartResponse(BaseModel):
@@ -32,13 +36,7 @@ class SessionStartResponse(BaseModel):
     data: SessionStartData
 
 
-class SessionStatusData(BaseModel):
-    sessionId: str
-    userId: int
-    deviceId: str
-    status: SessionStatus
-    createdAt: int
-    lastActivityAt: int
+class SessionStatusData(SessionBaseData):
     endedAt: Optional[int] = None
 
 
