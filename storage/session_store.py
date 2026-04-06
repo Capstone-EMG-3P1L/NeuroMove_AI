@@ -1,5 +1,5 @@
+import time
 from typing import Dict, Optional
-
 from pydantic import BaseModel
 
 from schemas.session_schema import SessionStatus
@@ -44,6 +44,7 @@ class SessionStore:
             return None
 
         session.status = status
+        session.lastActivityAt = int(time.time() * 1000)
         return session
 
     def touch_session(
