@@ -25,7 +25,7 @@ def start_session(request: SessionStartRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{sessionId}", response_model=SessionStatusResponse)
+@router.get("/status/{sessionId}", response_model=SessionStatusResponse)
 def get_session_status(sessionId: str):
     try:
         return session_service.get_session_status(sessionId)
