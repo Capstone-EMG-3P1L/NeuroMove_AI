@@ -12,15 +12,16 @@ class SessionService:
         if self.session_store.exists(request.sessionId):
             raise ValueError("session already exists")
 
-        created_at = int(time.time() * 1000)
+        started_at = int(time.time() * 1000)
 
         session = Session(
             sessionId=request.sessionId,
             userId=request.userId,
             deviceId=request.deviceId,
+            profileId=request.profileId,
+            calibration=request.calibration,
             status=SessionStatus.ACTIVE,
-            createdAt=created_at,
-            lastActivityAt=created_at,
+            startedAt=started_at,
         )
 
         self.session_store.create_session(session)
@@ -33,8 +34,7 @@ class SessionService:
                 userId=session.userId,
                 deviceId=session.deviceId,
                 status=session.status,
-                createdAt=session.createdAt,
-                lastActivityAt=session.lastActivityAt,
+                startedAt=session.startedAt,
             ),
         )
 
@@ -48,12 +48,9 @@ class SessionService:
             message="session status fetched",
             data=SessionStatusData(
                 sessionId=session.sessionId,
-                userId=session.userId,
-                deviceId=session.deviceId,
                 status=session.status,
-                createdAt=session.createdAt,
-                lastActivityAt=session.lastActivityAt,
-                endedAt=session.endedAt,
+                bufferedWindowCount=session.bufferedWindowCount,
+                lastIntent=session.lastIntent,
             ),
         )
 
