@@ -33,9 +33,10 @@ def get_session_status(sessionId: str):
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/end", response_model=SessionEndResponse)
-def end_session(request: SessionEndRequest):
+@router.patch("/{sessionId}/end", response_model=SessionEndResponse)
+def end_session(sessionId: str):
     try:
+        request = SessionEndRequest(sessionId=sessionId)
         return session_service.end_session(request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
