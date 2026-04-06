@@ -4,7 +4,7 @@ from services.session_service import *
 from storage.session_store import *
 
 router = APIRouter(
-    prefix="/sessions",
+    prefix="/ai/sessions",
     tags=["sessions"]
 )
 
