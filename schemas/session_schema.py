@@ -2,32 +2,29 @@ from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel
+from schemas.calibration_schema import CalibrationResult
 
 
 class SessionStatus(str, Enum):
-    CREATED = "CREATED"
     ACTIVE = "ACTIVE"
     ENDED = "ENDED"
-    EXPIRED = "EXPIRED"
+    FAILED = "FAILED"
 
 
 class SessionStartRequest(BaseModel):
     sessionId: str
     userId: int
     deviceId: str
+    profileId: str
+    calibration: CalibrationResult
 
 
-class SessionBaseData(BaseModel):
+class SessionStartData(BaseModel):
     sessionId: str
     userId: int
     deviceId: str
     status: SessionStatus
-    createdAt: int
-    lastActivityAt: int
-
-
-class SessionStartData(SessionBaseData):
-    pass
+    startedAt: int
 
 
 class SessionStartResponse(BaseModel):
@@ -36,8 +33,11 @@ class SessionStartResponse(BaseModel):
     data: SessionStartData
 
 
-class SessionStatusData(SessionBaseData):
-    endedAt: Optional[int] = None
+class SessionStatusData(BaseModel):
+    sessionId: str
+    status: SessionStatus
+    bufferedWindowCount: int
+    lastIntent: Optional[str] = None
 
 
 class SessionStatusResponse(BaseModel):
