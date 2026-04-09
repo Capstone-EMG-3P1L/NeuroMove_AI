@@ -185,3 +185,37 @@ class BackendInferenceSchema(BaseModel):
         if not v:
             raise ValueError("sessionId must not be blank")
         return v
+
+class BackendCommandSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    commandId: str = Field(..., min_length=1, max_length=100)
+    command: Literal[
+        "LEFT",
+        "RIGHT",
+        "FORWARD",
+        "BACKWARD",
+        "STOP",
+        "UNKNOWN"
+    ]
+    speedLevel: int = Field(..., ge=0, le=10)
+    issuedAt: str = Field(..., min_length=1)
+
+
+class BackendInferenceResponseDataSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    intentId: str = Field(..., min_length=1, max_length=100)
+    sessionId: str = Field(..., min_length=1, max_length=100)
+    accepted: bool
+    riskScore: float = Field(..., ge=0.0, le=1.0)
+    command: Optional[BackendCommandSchema] = None
+
+
+class BackendInferenceResponseSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool
+    code: str = Field(..., min_length=1, max_length=100)
+    message: str = Field(..., min_length=1, max_length=500)
+    data: Optional[BackendInferenceResponseDataSchema] = None
