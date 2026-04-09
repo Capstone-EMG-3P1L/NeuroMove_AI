@@ -38,13 +38,6 @@ def update_calibration_step(request: CalibrationStepUpdateRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/data", response_model=CalibrationDataResponse)
-def append_calibration_data(request: CalibrationDataRequest):
-    try:
-        return calibration_service.append_calibration_data(request)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
 
 @router.post("/finish", response_model=CalibrationFinishResponse)
 def finish_calibration(request: CalibrationFinishRequest):
