@@ -2,7 +2,7 @@ from fastapi import APIRouter,HTTPException,WebSocket,WebSocketDisconnect
 from schemas.stream_schema import *;
 
 router = APIRouter(
-    prefix="ai/stream",
+    prefix="/ai/stream",
     tags=["stream"]
 )
 
