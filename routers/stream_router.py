@@ -1,17 +1,14 @@
 from fastapi import APIRouter,HTTPException,WebSocket,WebSocketDisconnect
+from pydantic import ValidationError
 from schemas.stream_schema import *;
-from services.signal_processing_service import SignalProcessingService
-from services.feature_service import FeatureService
-from services.inference_service import InferenceService
+from services.stream_service import StreamService
 
 router = APIRouter(
     prefix="/ai/stream",
     tags=["stream"]
 )
 
-signal_processing_service = SignalProcessingService()
-feature_service = FeatureService()
-inference_service = InferenceService()
+stream_service = StreamService()
 
 
 @router.get("/ping")
@@ -19,48 +16,47 @@ def stream_ping():
     return {"message": "stream router connected"}
 
 @router.websocket("/ws")
-async def receive_stream(websocket:WebSocket):
+async def websocket_handler(websocket:WebSocket):
     await websocket.accept()
     print("EMG websocket connected")
     
     try:
         while True:
-            raw_data = await websocket.receive_json()
+            raw = await websocket.receive_json()
+            
+            msg_type = raw.get("type")
 
             try:
-                request = StreamRequestSchema(**raw_data)
-            except Exception as e:
+                if msg_type == "calibration_window":
+                    req = CalibrationWSRequest(**raw)
+                    res = stream_service.handle_calibration(req)
+
+                elif msg_type == "driving_window":
+                    req = DrivingWSRequest(**raw)
+                    res = stream_service.handle_driving(req)
+
+                else:
+                    raise ValueError("invalid type")
+
+            except ValidationError as e:
                 await websocket.send_json({
+                    "type": msg_type,
                     "success": False,
-                    "message": f"invalid request: {str(e)}",
+                    "message": str(e),
                     "data": None
                 })
                 continue
 
-            # 1. 전처리 -> 서비스명 향후 수정 예정
-            processed_channels = signal_processing_service.process(request.channels)
+            except Exception as e:
+                await websocket.send_json({
+                    "type": msg_type,
+                    "success": False,
+                    "message": str(e),
+                    "data": None
+                })
+                continue
 
-            # 2. feature 추출 -> 서비스명 향후 수정 예정
-            feature_vector = feature_service.extract_features(processed_channels)
-
-            # 3. 추론 -> 서비스명 향후 수정 예정
-            inference_result = inference_service.predict(feature_vector)
-
-            buffered_window_count += 1
-
-            response = StreamAckResponseSchema(
-                success=True,
-                message="실시간 EMG 데이터가 처리되었습니다.",
-                data={
-                    "sessionId": request.session_id,
-                    "deviceId": "emg-esp32-A12F",
-                    "acceptedSequenceNumber": request.sequence_number,
-                    "bufferedWindowCount": buffered_window_count,
-                    "inferenceTriggered": True
-                }
-            )
-
-            await websocket.send_json(response.model_dump())
+            await websocket.send_json(res.model_dump(by_alias=True))
 
     except WebSocketDisconnect:
-        print("EMG websocket disconnected")
+        print("WebSocket disconnected")
