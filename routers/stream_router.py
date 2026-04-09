@@ -11,7 +11,7 @@ router = APIRouter(
 def stream_ping():
     return {"message": "stream router connected"}
 
-@router.post("/ws")
+@router.websocket("/ws")
 async def receive_stream(websocket:WebSocket):
     await websocket.accept()
     print("EMG websocket connected")
