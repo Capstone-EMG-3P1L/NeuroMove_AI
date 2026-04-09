@@ -1,4 +1,4 @@
-from fastapi import APIRouter,HTTPException
+from fastapi import APIRouter,HTTPException,WebSocket,WebSocketDisconnect
 from schemas.stream_schema import *;
 
 router = APIRouter(
@@ -11,15 +11,28 @@ router = APIRouter(
 def stream_ping():
     return {"message": "stream router connected"}
 
-@router.post("/emg", response_model=StreamAckResponseSchema)
-def receive_stream(request: StreamRequestSchema):
+@router.post("/ws")
+async def receive_stream(websocket:WebSocket):
+    await websocket.accept()
+    print("EMG websocket connected")
+    
     try:
-        request.validate_window_matches_samples()
+        while True:
+            raw_data = await websocket.receive_json()
 
-        return StreamAckResponseSchema(
-            status="success",
-            message="EMG stream received successfully"
-        )
+            try:
+                request = EmgWindowRequest(**raw_data)
+            except Exception as e:
+                await websocket.send_json({
+                    "success": False,
+                    "message": f"invalid request: {str(e)}",
+                    "data": None
+                })
+                continue
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+            response = stream_service.process_emg_window(request)
+
+            await websocket.send_json(response.model_dump())
+
+    except WebSocketDisconnect:
+        print("EMG websocket disconnected")
