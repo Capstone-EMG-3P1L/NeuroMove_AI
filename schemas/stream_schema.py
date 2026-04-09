@@ -98,18 +98,8 @@ class StreamRequestSchema(BaseModel):
 
         return v
 
-    @field_validator("window_size")
-    @classmethod
-    def validate_window_size(cls, v: int) -> int:
-        if v <= 0:
-            raise ValueError("window_size must be greater than 0")
-        return v
-
-    def validate_window_matches_samples(self) -> None:
-        
-        # 서비스 계층에서 추가 호출 가능:
-        # window_size와 실제 channel sample 개수가 일치하는지 검사
-        
+    @model_validator(mode="after")
+    def validate_window_matches_samples(self):
         if not self.channels:
             raise ValueError("channels must not be empty")
 
@@ -119,6 +109,7 @@ class StreamRequestSchema(BaseModel):
                 f"window_size({self.window_size}) does not match "
                 f"actual sample size({actual_size})"
             )
+        return self
 
 
 class InferenceResultSchema(BaseModel):
