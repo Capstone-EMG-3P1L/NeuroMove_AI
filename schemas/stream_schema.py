@@ -8,8 +8,8 @@ class EMGChannelData(BaseModel):
     # 채널 한 개의 EMG 샘플 데이터
     # 예: channel_index=0, samples=[123, 118, 130, ...]
     
-    channel_index: int = Field(..., ge=0, description="EMG 채널 인덱스")
-    samples: List[float] = Field(
+    channel_index: int = Field(..., ge=0, description="EMG 채널 인덱스",alias="channelIndex")
+    samples: List[int] = Field(
         ...,
         min_length=1,
         description="해당 채널에서 수집된 raw EMG 샘플 배열"
@@ -36,35 +36,41 @@ class StreamRequestSchema(BaseModel):
         ...,
         min_length=1,
         max_length=100,
-        description="세션 식별자"
+        description="세션 식별자",
+        alias="sessionId"
     )
     sequence_number: int = Field(
         ...,
         ge=0,
-        description="스트림 패킷 순서 번호"
+        description="스트림 패킷 순서 번호",
+        alias="sequenceNumber"
     )
     timestamp: int = Field(
         ...,
         ge=0,
-        description="클라이언트 기준 전송 시각 (epoch ms)"
+        description="클라이언트 기준 전송 시각 (epoch ms)",
+        alias="timestamp"
     )
     sampling_rate: int = Field(
         ...,
         gt=0,
         le=5000,
-        description="EMG 샘플링 레이트(Hz)"
+        description="EMG 샘플링 레이트(Hz)",
+        alias="samplingRate"
     )
     window_size: int = Field(
         ...,
         gt=0,
         le=5000,
-        description="현재 요청에 포함된 샘플 수"
+        description="현재 요청에 포함된 샘플 수",
+        alias="windowSize"
     )
     channels: List[EMGChannelData] = Field(
         ...,
         min_length=1,
         max_length=16,
-        description="채널별 EMG 데이터 목록"
+        description="채널별 EMG 데이터 목록",
+        alias="channels"
     )
 
     @field_validator("session_id")
@@ -145,11 +151,17 @@ class InferenceResultSchema(BaseModel):
     )
 
 
+class StreamAckDataSchema(BaseModel):
+    session_id: str = Field(..., alias="sessionId")
+    device_id: str = Field(..., alias="deviceId")
+    accepted_sequence_number: int = Field(..., alias="acceptedSequenceNumber")
+    buffered_window_count: int = Field(..., alias="bufferedWindowCount")
+    inference_triggered: bool = Field(..., alias="inferenceTriggered")
+
 class StreamAckResponseSchema(BaseModel):
-    
-    # esp32 에 주는 응답형식
-    status: Literal["success", "failure"]
+    success: bool
     message: str
+    data: StreamAckDataSchema | None = None
     
     
 class BackendInferenceSchema(BaseModel):
@@ -158,6 +170,8 @@ class BackendInferenceSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sessionId: str = Field(..., min_length=1, max_length=100)
+    sequenceNumber : int
+    emgDeviceId : str
     timestamp: int = Field(..., ge=0)
 
     intent: Literal[
