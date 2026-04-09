@@ -1,6 +1,19 @@
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+
+# 공통 채널
+class EMGChannel(BaseModel):
+    channelIndex: int
+    samples: List[int]
+
+
+# =========================
+# BASE
+# =========================
+class BaseWSRequest(BaseModel):
+    type: Literal["calibration_window", "driving_window"]
+
 
 
 class EMGChannelData(BaseModel):
@@ -111,6 +124,73 @@ class StreamRequestSchema(BaseModel):
             )
         return self
 
+# =========================
+# Calibration
+# =========================
+class CalibrationWSRequest(BaseWSRequest):
+    type: Literal["calibration_window"]
+
+    calibrationSessionId: str
+    deviceId: str
+    sequenceNumber: int
+    timestamp: int
+    samplingRate: int
+    windowSize: int
+    channels: List[EMGChannel]
+
+
+class CalibrationWSAckData(BaseModel):
+    calibrationSessionId: str
+    deviceId: str
+    acceptedSequenceNumber: int
+    currentStep: str
+    bufferedWindowCount: int
+
+
+class CalibrationWSAck(BaseModel):
+    type: Literal["calibration_window_ack"]
+    success: bool
+    message: str
+    data: Optional[CalibrationWSAckData]
+
+
+# =========================
+# Driving
+# =========================
+class DrivingWSRequest(BaseWSRequest):
+    type: Literal["driving_window"]
+
+    sessionId: str
+    deviceId: str
+    sequenceNumber: int
+    timestamp: int
+    samplingRate: int
+    windowSize: int
+    channels: List[EMGChannel]
+
+
+class DrivingWSAckData(BaseModel):
+    sessionId: str
+    deviceId: str
+    acceptedSequenceNumber: int
+    bufferedWindowCount: int
+    inferenceTriggered: bool
+
+
+class DrivingWSAck(BaseModel):
+    type: Literal["driving_window_ack"]
+    success: bool
+    message: str
+    data: Optional[DrivingWSAckData]
+
+
+# =========================
+# Union
+# =========================
+WSRequestUnion = Union[
+    CalibrationWSRequest,
+    DrivingWSRequest
+]
 
 class InferenceResultSchema(BaseModel):
     # AI 추론 결과 서버 내부 사용 용도
