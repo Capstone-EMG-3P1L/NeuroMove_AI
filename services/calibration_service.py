@@ -1,19 +1,31 @@
 from schemas.calibration_schema import *;
 from storage.calibration_store import *;
+from storage.device_mode_registry import DeviceModeRegistry
 import time
 from typing import Dict
 
 
 class CalibrationService:
-    def __init__(self, calibration_store: CalibrationSessionStore):
+    def __init__(
+        self,
+        calibration_store: CalibrationSessionStore,
+        device_mode_registry: DeviceModeRegistry,
+    ):
         self.calibration_store = calibration_store
+        self.device_mode_registry = device_mode_registry
 
     def start_calibration(self, request: CalibrationStartRequest,) -> CalibrationStartResponse:
         if self.calibration_store.exists(request.calibrationSessionId):
             raise ValueError("calibration session already exists")
 
+        # 같은 deviceId 가 이미 calibration / session 중이면 거절(요건 2: 동시 진행 금지)
+        self.device_mode_registry.set_calibration(
+            request.deviceId,
+            request.calibrationSessionId,
+        )
+
         started_at = int(time.time()*1000)
-        
+
         session = CalibrationSession(
             calibrationSessionId=request.calibrationSessionId,
             userId=request.userId,
@@ -170,6 +182,10 @@ class CalibrationService:
         )
         if completed_session is None:
             raise ValueError("failed to save calibration result")
+
+        # calibration 끝났으니 device 를 IDLE 로 풀어준다.
+        # → 같은 deviceId 로 session 시작 가능해짐
+        self.device_mode_registry.clear(completed_session.deviceId)
 
         return CalibrationFinishResponse(
             success=True,
