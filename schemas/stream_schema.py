@@ -9,11 +9,34 @@ class EMGChannel(BaseModel):
 
 
 # =========================
-# BASE
+# 통합 EMG WebSocket 메시지
 # =========================
-class BaseWSRequest(BaseModel):
-    type: Literal["calibration_window", "driving_window"]
+# ESP32 한 보드에서 실시간으로 들어오는 EMG window 패킷.
+# - calibration / session 모드 구분은 ESP32 가 하지 않는다.
+# - 서버의 DeviceModeRegistry 가 deviceId 기준으로 현재 활성 모드를 판단해
+#   calibration_store 또는 session_store 로 라우팅하고, 둘 다 아니면 무시한다.
+class EmgWindowMessage(BaseModel):
+    deviceId: str
+    sequenceNumber: int
+    timestamp: int
+    samplingRate: int
+    windowSize: int
+    channels: List[EMGChannel]
 
+
+class EmgWindowAckData(BaseModel):
+    deviceId: str
+    mode: Literal["IDLE", "CALIBRATION", "SESSION"]
+    activeId: Optional[str] = None
+    acceptedSequenceNumber: int
+    bufferedWindowCount: int
+
+
+class EmgWindowAck(BaseModel):
+    type: Literal["emg_window_ack"] = "emg_window_ack"
+    success: bool
+    message: str
+    data: Optional[EmgWindowAckData] = None
 
 
 class EMGChannelData(BaseModel):
@@ -125,72 +148,11 @@ class StreamRequestSchema(BaseModel):
         return self
 
 # =========================
-# Calibration
+# (구) calibration_window / driving_window 분리 스키마는 제거됨.
+#  → ESP32 보드는 한 개이고, 동일 EMG 스트림을 모드에 따라 라우팅하는 구조로 통합.
+#  → EmgWindowMessage / EmgWindowAck 사용.
 # =========================
-class CalibrationWSRequest(BaseWSRequest):
-    type: Literal["calibration_window"]
 
-    calibrationSessionId: str
-    deviceId: str
-    sequenceNumber: int
-    timestamp: int
-    samplingRate: int
-    windowSize: int
-    channels: List[EMGChannel]
-
-
-class CalibrationWSAckData(BaseModel):
-    calibrationSessionId: str
-    deviceId: str
-    acceptedSequenceNumber: int
-    currentStep: str
-    bufferedWindowCount: int
-
-
-class CalibrationWSAck(BaseModel):
-    type: Literal["calibration_window_ack"]
-    success: bool
-    message: str
-    data: Optional[CalibrationWSAckData]
-
-
-# =========================
-# Driving
-# =========================
-class DrivingWSRequest(BaseWSRequest):
-    type: Literal["driving_window"]
-
-    sessionId: str
-    deviceId: str
-    sequenceNumber: int
-    timestamp: int
-    samplingRate: int
-    windowSize: int
-    channels: List[EMGChannel]
-
-
-class DrivingWSAckData(BaseModel):
-    sessionId: str
-    deviceId: str
-    acceptedSequenceNumber: int
-    bufferedWindowCount: int
-    inferenceTriggered: bool
-
-
-class DrivingWSAck(BaseModel):
-    type: Literal["driving_window_ack"]
-    success: bool
-    message: str
-    data: Optional[DrivingWSAckData]
-
-
-# =========================
-# Union
-# =========================
-WSRequestUnion = Union[
-    CalibrationWSRequest,
-    DrivingWSRequest
-]
 
 class InferenceResultSchema(BaseModel):
     # AI 추론 결과 서버 내부 사용 용도
