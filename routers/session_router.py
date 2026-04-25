@@ -1,15 +1,15 @@
 from fastapi import APIRouter, HTTPException
+
 from schemas.session_schema import *
-from services.session_service import *
-from storage.session_store import *
+from services.session_service import SessionService
+from storage import session_store, device_mode_registry
 
 router = APIRouter(
     prefix="/ai/sessions",
-    tags=["sessions"]
+    tags=["sessions"],
 )
 
-session_store = SessionStore()
-session_service = SessionService(session_store)
+session_service = SessionService(session_store, device_mode_registry)
 
 
 @router.get("/ping")
