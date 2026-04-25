@@ -1,24 +1,23 @@
 import os
 import pickle
+from functools import lru_cache
 
 from schemas.stream_schema import InferenceResultSchema
 
 
-# 모델 파일 경로
 MODEL_PATH = "models/intent_model.pkl"
-
-# 모델 버전
 MODEL_VERSION = "mock-v2"
 
+VALID_INTENTS = {"LEFT", "RIGHT", "FORWARD", "BACKWARD", "STOP", "UNKNOWN"}
 
+
+@lru_cache(maxsize=1)
 def load_model():
-    # pkl 파일이 존재하면 모델 로드
+    # 모델 파일이 있으면 한 번만 로드해서 캐싱
     if os.path.exists(MODEL_PATH):
         with open(MODEL_PATH, "rb") as file:
-            model = pickle.load(file)
-        return model
+            return pickle.load(file)
 
-    # 없으면 None 반환
     return None
 
 
@@ -43,27 +42,30 @@ def _mock_predict(feature_vector: list[float]) -> tuple[str, float]:
 
     max_channel = channel_scores.index(max_score)
 
-    if max_channel == 0:
-        intent = "LEFT"
-    elif max_channel == 1:
-        intent = "RIGHT"
-    elif max_channel == 2:
-        intent = "FORWARD"
-    else:
-        intent = "UNKNOWN"
+    intent_map = {
+        0: "LEFT",
+        1: "RIGHT",
+        2: "FORWARD",
+        3: "BACKWARD",
+    }
+
+    intent = intent_map.get(max_channel, "UNKNOWN")
+
+    if intent == "UNKNOWN":
+        return "UNKNOWN", 0.0
 
     return intent, round(min(max_score, 1.0), 4)
 
 
 def predict_intent(feature_vector: list[float]) -> InferenceResultSchema:
-    # 모델 로드 시도
     model = load_model()
 
-    # 실제 모델이 있으면 predict 수행
     if model is not None:
-        prediction = model.predict([feature_vector])[0]
+        prediction = str(model.predict([feature_vector])[0])
 
-        # predict_proba 지원 모델이면 confidence 계산
+        if prediction not in VALID_INTENTS:
+            prediction = "UNKNOWN"
+
         if hasattr(model, "predict_proba"):
             probabilities = model.predict_proba([feature_vector])[0]
             confidence = round(float(max(probabilities)), 4)
@@ -77,7 +79,6 @@ def predict_intent(feature_vector: list[float]) -> InferenceResultSchema:
             model_version="trained-model",
         )
 
-    # 모델 없으면 mock 예측 수행
     intent, confidence = _mock_predict(feature_vector)
 
     return InferenceResultSchema(
