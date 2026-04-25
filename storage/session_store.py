@@ -15,6 +15,7 @@ class Session(BaseModel):
     startedAt: int
     endedAt: Optional[int] = None
     bufferedWindowCount: int = 0
+    lastSequenceNumber: Optional[int] = None
     lastIntent: Optional[str] = None
 
 
@@ -60,4 +61,17 @@ class SessionStore:
 
         session.status = SessionStatus.ENDED
         session.endedAt = ended_at
+        return session
+
+    def increment_window_count(
+        self,
+        session_id: str,
+        sequence_number: int,
+    ) -> Optional[Session]:
+        session = self.get_session(session_id)
+        if session is None:
+            return None
+
+        session.bufferedWindowCount += 1
+        session.lastSequenceNumber = sequence_number
         return session
