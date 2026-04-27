@@ -1,7 +1,7 @@
 import time
 
-from schemas.session_schema import *;
-from storage.session_store import *;
+from schemas.session_schema import *
+from storage.session_store import *
 from storage.device_mode_registry import DeviceModeRegistry
 
 
@@ -132,11 +132,47 @@ class SessionService:
         if updated is None:
             raise ValueError("failed to append session window")
 
-        # TODO: 추론(inference) 트리거 위치
-        #   if self._should_trigger_inference(updated):
-        #       recent = self.session_store.get_recent_windows(session_id, N)
-        #       intent = self.inference_pipeline.run(updated, recent)
-        #       self.session_store.update_last_intent(session_id, intent.intent)
-        #       self.backend_client.send_intent(...)
+        return updated
+
+    def get_session(self, session_id: str) -> Session:
+        """
+        sessionId 기준으로 active session 메타데이터를 조회
+        추론 파이프라인에서 session.calibration을 가져올 때 사용
+        """
+        session = self.session_store.get_session(session_id)
+        if session is None:
+            raise ValueError("session not found")
+
+        return session
+
+    def get_recent_windows(
+        self,
+        session_id: str,
+        count: int,
+    ) -> list[SessionWindow]:
+        """
+        추론 파이프라인에서 최근 N개 EMG window를 조회할 때 사용
+        """
+        return self.session_store.get_recent_windows(
+            session_id=session_id,
+            count=count,
+        )
+
+    def update_last_intent(
+        self,
+        session_id: str,
+        intent: str,
+    ) -> Session:
+        """
+        추론 결과 intent를 session metadata에 저장
+        /ai/sessions/status/{sessionId}에서 lastIntent로 확인 가능
+        """
+        updated = self.session_store.update_last_intent(
+            session_id=session_id,
+            intent=intent,
+        )
+
+        if updated is None:
+            raise ValueError("failed to update last intent")
 
         return updated
