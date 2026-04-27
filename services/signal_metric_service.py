@@ -56,22 +56,26 @@ def calculate_signal_quality(
     현재 기준:
     - mean + std로 현재 신호 품질 계산
     - calibration.signalQuality가 있으면 기준 품질과 현재 품질을 함께 반영
-    - 값은 0.0 ~ 1.0 범위로 반환
+    - calibration ratio 계산 후 마지막에 0.0 ~ 1.0 범위로 제한
     """
     signal = _flatten_signals(processed_channels)
 
     mean_value = float(np.mean(signal))
     std_value = float(np.std(signal))
 
-    current_quality = _clamp_score(mean_value + std_value)
+    # calibration ratio 계산 전에 clamp하지 않고 raw 값을 유지
+    raw_current = mean_value + std_value
 
     calibration_quality = _get_calibration_signal_quality(calibration)
 
     if calibration_quality is None or calibration_quality <= 0:
+        current_quality = _clamp_score(raw_current)
         return round(current_quality, 4)
 
     # calibration 당시 품질과 현재 품질을 비교해서 보정
-    quality = current_quality / calibration_quality
+    quality = raw_current / calibration_quality
+
+    # 최종 결과에서만 0~1 범위로 제한
     quality = _clamp_score(quality)
 
     return round(quality, 4)
