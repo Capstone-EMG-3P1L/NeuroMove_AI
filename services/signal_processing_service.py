@@ -37,7 +37,7 @@ def rectify_signal(signal: np.ndarray) -> np.ndarray:
 
 def normalize_signal(signal: np.ndarray) -> np.ndarray:
     # 최대값 추출
-    max_value = np.max(signal)
+    max_value = np.max(np.abs(signal))
 
     # 최대값이 0이면 그대로 반환
     if max_value == 0:
