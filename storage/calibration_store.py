@@ -2,7 +2,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from schemas.calibration_schema import (
-    CalibrationWindowRequest,
+    CalibrationDataRequest,
     CalibrationResult,
     CalibrationStatus,
     CalibrationStep,
@@ -15,7 +15,7 @@ class CalibrationSession(BaseModel):
     deviceId: str
     status: CalibrationStatus = CalibrationStatus.READY
     currentStep: CalibrationStep = CalibrationStep.REST
-    stepBuffers: Dict[CalibrationStep, List[CalibrationWindowRequest]] = Field(
+    stepBuffers: Dict[CalibrationStep, List[CalibrationDataRequest]] = Field(
         default_factory=lambda: {
             CalibrationStep.REST: [],
             CalibrationStep.LEFT: [],
@@ -28,13 +28,13 @@ class CalibrationSession(BaseModel):
     completedAt: Optional[int] = None
     result: Optional[CalibrationResult] = None
 
-    
+
 class CalibrationSessionStore:
-    #서버 실행되면 sessions 딕셔너리 구조 생성
+    # 서버 실행되면 sessions 딕셔너리 구조 생성
     # {
-    # "CAL-1001": CalibrationSession(...),
-    # "CAL-1002": CalibrationSession(...),
-    # }   
+    #   "CAL-1001": CalibrationSession(...),
+    #   "CAL-1002": CalibrationSession(...),
+    # }
     def __init__(self):
         self._sessions: Dict[str, CalibrationSession] = {}
 
@@ -67,12 +67,12 @@ class CalibrationSessionStore:
     def append_raw_data(
         self,
         calibration_session_id: str,
-        sample: CalibrationWindowRequest,
+        sample: CalibrationDataRequest,
     ) -> Optional[CalibrationSession]:
         session = self.get_session(calibration_session_id)
         if session is None:
             return None
-        
+
         if session.deviceId != sample.deviceId:
             return None
 

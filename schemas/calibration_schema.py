@@ -23,16 +23,7 @@ class ChannelWindow(BaseModel):
     samples: List[int] = Field(..., description="Raw EMG samples for the channel")
 
 
-class CalibrationWindowRequest(BaseModel):
-    calibrationSessionId: str
-    deviceId: str
-    sequenceNumber: int
-    timestamp: int
-    samplingRate: int
-    windowSize: int
-    channels: List[ChannelWindow]
-
-#Calibration 측정 시작
+# Calibration 측정 시작
 class CalibrationStartRequest(BaseModel):
     calibrationSessionId: str
     userId: int
@@ -54,6 +45,7 @@ class CalibrationStartResponse(BaseModel):
     message: str
     data: CalibrationStartData
 
+
 # Calibration 단계 변경
 class CalibrationStepUpdateRequest(BaseModel):
     calibrationSessionId: str
@@ -70,7 +62,10 @@ class CalibrationStepUpdateResponse(BaseModel):
     message: str
     data: CalibrationStepUpdateData
 
-# EMG 센서에 측정되는 값 받기(esp32 보드)
+
+# EMG 센서에 측정되는 값 받기 (esp32 보드)
+# WebSocket 으로 들어온 EmgWindowMessage 를 StreamService 에서 이 형태로 변환해서
+# CalibrationService.append_calibration_data 로 넘겨준다.
 class CalibrationDataRequest(BaseModel):
     calibrationSessionId: str
     deviceId: str
@@ -80,16 +75,6 @@ class CalibrationDataRequest(BaseModel):
     windowSize: int
     channels: List[ChannelWindow]
 
-    
-class CalibrationDataResponseData(BaseModel):
-    calibrationSessionId: str
-    currentStep: CalibrationStep
-    stepWindowCounts: Dict[CalibrationStep, int]
-
-class CalibrationDataResponse(BaseModel):
-    success: bool
-    message: str
-    data: CalibrationDataResponseData
 
 # 백엔드한테 현재 진행 어느정도 됐는지 알리는 형식
 class CalibrationStatusData(BaseModel):
@@ -104,6 +89,7 @@ class CalibrationStatusResponse(BaseModel):
     success: bool
     message: str
     data: CalibrationStatusData
+
 
 # Calibration 종료 후 분석 결과
 class BaselineResult(BaseModel):
