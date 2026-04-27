@@ -6,14 +6,14 @@ from schemas.stream_schema import InferenceResultSchema
 
 
 MODEL_PATH = "models/intent_model.pkl"
-MODEL_VERSION = "mock-v3"
+MODEL_VERSION = "mock-v4"
 
 # 현재 프로젝트에서 사용하는 intent 라벨
 # LEFT  : 왼쪽으로 고개 돌림
 # RIGHT : 오른쪽으로 고개 돌림
-# REST  : 힘 빼고 가만히 있음
+# REST  : 힘 빼고 가만히 있음 / 알 수 없는 신호
 # STOP  : 힘줘서 멈춤
-VALID_INTENTS = {"LEFT", "RIGHT", "REST", "STOP", "UNKNOWN"}
+VALID_INTENTS = {"LEFT", "RIGHT", "REST", "STOP"}
 
 
 @lru_cache(maxsize=1)
@@ -27,9 +27,9 @@ def load_model():
 
 
 def _mock_predict(feature_vector: list[float]) -> tuple[str, float]:
-    # feature가 없으면 UNKNOWN
+    # feature가 없으면 REST
     if not feature_vector:
-        return "UNKNOWN", 0.0
+        return "REST", 0.0
 
     channel_scores = []
 
@@ -42,7 +42,7 @@ def _mock_predict(feature_vector: list[float]) -> tuple[str, float]:
     max_score = max(channel_scores)
 
     # 전체 신호가 약하면 REST
-    # REST = 힘 빼고 가만히 있는 상태
+    # REST = 힘 빼고 가만히 있는 상태 / 알 수 없는 신호
     if max_score < 0.15:
         return "REST", round(max_score, 4)
 
@@ -63,10 +63,8 @@ def _mock_predict(feature_vector: list[float]) -> tuple[str, float]:
         1: "RIGHT",
     }
 
-    intent = intent_map.get(max_channel, "UNKNOWN")
-
-    if intent == "UNKNOWN":
-        return "UNKNOWN", 0.0
+    # 매핑되지 않는 채널이면 REST 처리
+    intent = intent_map.get(max_channel, "REST")
 
     return intent, round(min(max_score, 1.0), 4)
 
@@ -77,8 +75,9 @@ def predict_intent(feature_vector: list[float]) -> InferenceResultSchema:
     if model is not None:
         prediction = str(model.predict([feature_vector])[0])
 
+        # 모델이 허용되지 않은 라벨을 예측하면 REST 처리
         if prediction not in VALID_INTENTS:
-            prediction = "UNKNOWN"
+            prediction = "REST"
 
         if hasattr(model, "predict_proba"):
             probabilities = model.predict_proba([feature_vector])[0]
