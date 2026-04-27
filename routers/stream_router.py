@@ -43,11 +43,10 @@ async def websocket_handler(websocket: WebSocket):
 
     try:
         while True:
-            raw = await websocket.receive_json()
-
             try:
-                msg = EmgWindowMessage(**raw)
-            except ValidationError as e:
+                raw = await websocket.receive_json()
+                msg = EmgWindowMessage.model_validate(raw)
+            except (ValidationError, ValueError, TypeError) as e:
                 await websocket.send_json({
                     "type": "emg_window_ack",
                     "success": False,
@@ -67,7 +66,7 @@ async def websocket_handler(websocket: WebSocket):
                 })
                 continue
 
-            await websocket.send_json(ack.model_dump())
+            await websocket.send_json(ack.model_dump(by_alias=True))
 
     except WebSocketDisconnect:
         print("WebSocket disconnected")
