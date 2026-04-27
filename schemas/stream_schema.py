@@ -101,10 +101,8 @@ class BackendInferenceSchema(BaseModel):
     intent: Literal[
         "LEFT",
         "RIGHT",
-        "FORWARD",
-        "BACKWARD",
+        "REST",
         "STOP",
-        "UNKNOWN"
     ]
 
     confidence: float = Field(..., ge=0.0, le=1.0)
@@ -127,10 +125,8 @@ class BackendCommandSchema(BaseModel):
     command: Literal[
         "LEFT",
         "RIGHT",
-        "FORWARD",
-        "BACKWARD",
+        "REST",
         "STOP",
-        "UNKNOWN"
     ]
     speedLevel: int = Field(..., ge=0, le=10)
     issuedAt: str = Field(..., min_length=1)
