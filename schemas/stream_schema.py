@@ -72,7 +72,7 @@ class EmgWindowMessage(BaseModel):
 
 class EmgWindowAckData(BaseModel):
     deviceId: str
-    mode: Literal["IDLE", "CALIBRATION", "SESSION"]
+    mode: DeviceMode
     activeId: Optional[str] = None
     acceptedSequenceNumber: int
     bufferedWindowCount: int
