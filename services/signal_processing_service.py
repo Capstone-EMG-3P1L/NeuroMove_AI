@@ -1,6 +1,9 @@
 import numpy as np
 
 
+MAX_SUPPORTED_CHANNELS = 16
+
+
 def _get_channel_index(channel) -> int:
     # 채널 객체에서 channel index 추출
     channel_index = getattr(channel, "channel_index", None)
@@ -29,35 +32,47 @@ def _get_baseline_stats(calibration, channel_index: int) -> tuple[float, float] 
     """
     channelIndex 기준으로 calibration baseline mean/std를 가져온다.
 
-    현재 매핑:
+    매핑 기준:
     channelIndex 0 -> ch1Mean / ch1Std
     channelIndex 1 -> ch2Mean / ch2Std
     channelIndex 2 -> ch3Mean / ch3Std
+    ...
+    channelIndex n -> ch{n+1}Mean / ch{n+1}Std
+
+    calibration이 없으면 None을 반환해서 기존 remove_dc_offset 방식으로 fallback한다.
+    calibration이 있는데 baseline 필드가 없으면 설정 불일치로 보고 예외를 발생시킨다.
     """
     if calibration is None:
         return None
 
     baseline = getattr(calibration, "baseline", None)
     if baseline is None:
-        return None
+        raise ValueError("calibration baseline is missing")
 
-    baseline_map = {
-        0: ("ch1Mean", "ch1Std"),
-        1: ("ch2Mean", "ch2Std"),
-        2: ("ch3Mean", "ch3Std"),
-    }
+    if channel_index < 0:
+        raise ValueError(f"invalid channel index: {channel_index}")
 
-    field_names = baseline_map.get(channel_index)
-    if field_names is None:
-        return None
+    if channel_index >= MAX_SUPPORTED_CHANNELS:
+        raise ValueError(f"unsupported channel index: {channel_index}")
 
-    mean_field, std_field = field_names
+    channel_number = channel_index + 1
+    mean_field = f"ch{channel_number}Mean"
+    std_field = f"ch{channel_number}Std"
 
-    mean_value = getattr(baseline, mean_field, None)
-    std_value = getattr(baseline, std_field, None)
+    if not hasattr(baseline, mean_field) or not hasattr(baseline, std_field):
+        raise ValueError(
+            f"calibration baseline missing fields for channelIndex {channel_index}: "
+            f"{mean_field}, {std_field}"
+        )
+
+    mean_value = getattr(baseline, mean_field)
+    std_value = getattr(baseline, std_field)
 
     if mean_value is None or std_value is None:
-        return None
+        raise ValueError(
+            f"calibration baseline contains null value for channelIndex {channel_index}: "
+            f"{mean_field}, {std_field}"
+        )
 
     return float(mean_value), float(std_value)
 
