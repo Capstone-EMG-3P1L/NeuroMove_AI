@@ -62,7 +62,7 @@ class StreamService:
                 message="device idle, dropped",
                 data=EmgWindowAckData(
                     deviceId=msg.deviceId,
-                    mode="IDLE",
+                    mode=DeviceMode.IDLE,
                     activeId=None,
                     acceptedSequenceNumber=msg.sequenceNumber,
                     bufferedWindowCount=0,
@@ -182,6 +182,10 @@ class StreamService:
                 message=str(e),
                 data=None,
             )
+
+        # TODO: 추론(inference) 트리거 위치.
+        #   - 추후 별도 inference 파이프라인이 붙으면 여기서 호출.
+        #   - 현재 단계에서는 buffer 누적만 수행.
 
         return EmgWindowAck(
             success=True,
