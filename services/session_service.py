@@ -1,5 +1,4 @@
 import time
-from typing import Optional
 
 from schemas.session_schema import *;
 from storage.session_store import *;
@@ -101,24 +100,43 @@ class SessionService:
         self,
         session_id: str,
         device_id: str,
-        sequence_number: int,
-    ) -> Optional[Session]:
+        window: SessionWindow,
+    ) -> Session:
         """
         WebSocket 으로 들어온 EMG window 한 개를 active session 에 누적.
 
-        - 추론(inference) 은 아직 미구현. 현재는 bufferedWindowCount 만 증가시킨다.
-        - 추후 inference_service 가 붙으면 여기에서 호출하게 된다. (TODO)
+        StreamService 가 deviceMode == SESSION 으로 라우팅한 후 호출하는,
+        세션 도메인의 단일 ingest 엔트리포인트.
+
+        - raw EMG 는 session_store._buffers (ring buffer) 에 저장되고,
+          추후 추론 파이프라인이 get_recent_windows() 로 꺼내서 사용한다.
+        - 검증 실패 시 ValueError (StreamService 가 catch 해 ack 로 변환).
+
+        TODO: 일정 buffer 누적 시점에서 추론 파이프라인을 트리거한다.
+              signal_processing -> feature -> inference -> backend POST /api/ai/intent
         """
         session = self.session_store.get_session(session_id)
         if session is None:
-            return None
+            raise ValueError("session not found")
         if session.status != SessionStatus.ACTIVE:
-            return None
+            raise ValueError("session is not active")
         if session.deviceId != device_id:
-            return None
+            raise ValueError("deviceId mismatch with active session")
+        if (
+            session.lastSequenceNumber is not None
+            and window.sequenceNumber <= session.lastSequenceNumber
+        ):
+            raise ValueError("invalid sequence number")
 
-        # TODO: sequenceNumber 연속성/gap 감지
-        return self.session_store.increment_window_count(
-            session_id,
-            sequence_number,
-        )
+        updated = self.session_store.append_window_data(session_id, window)
+        if updated is None:
+            raise ValueError("failed to append session window")
+
+        # TODO: 추론(inference) 트리거 위치
+        #   if self._should_trigger_inference(updated):
+        #       recent = self.session_store.get_recent_windows(session_id, N)
+        #       intent = self.inference_pipeline.run(updated, recent)
+        #       self.session_store.update_last_intent(session_id, intent.intent)
+        #       self.backend_client.send_intent(...)
+
+        return updated

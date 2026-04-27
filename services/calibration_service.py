@@ -69,7 +69,7 @@ class CalibrationService:
                 canFinish = all(count > 0 for count in step_window_counts.values()) #기준 일단 임시로 정의
             ),
         )
-    
+
     def update_calibration_step(self,request: CalibrationStepUpdateRequest,) -> CalibrationStepUpdateResponse:
         session = self.calibration_store.get_session(request.calibrationSessionId)
         if session is None:
@@ -93,18 +93,31 @@ class CalibrationService:
                 currentStep=updated_session.currentStep,
             ),
         )
-    
-    def append_calibration_data(self,request: CalibrationDataRequest,) -> CalibrationDataResponse:
+
+    def append_calibration_data(
+        self,
+        request: CalibrationDataRequest,
+    ) -> CalibrationSession:
+        """
+        WebSocket 으로 들어온 EMG window 한 개를 calibration step buffer 에 누적.
+
+        StreamService 가 deviceMode == CALIBRATION 으로 라우팅한 후 호출하는,
+        calibration 도메인의 단일 ingest 엔트리포인트.
+
+        검증 실패 시 ValueError 를 던진다 (StreamService 가 catch 해 ack 로 변환).
+        """
         session = self.calibration_store.get_session(request.calibrationSessionId)
         if session is None:
             raise ValueError("calibration session not found")
 
         if session.status == CalibrationStatus.COMPLETED:
             raise ValueError("calibration session already completed")
-        
-        # 시퀀스 넘버가 이전보다 작거나 같으면 안됨 -> 증가만 하면 OK 
-        # TODO:
-        #실제 시스템은 “연속성 체크 + gap 감지” 로 변경하도록
+
+        if session.deviceId != request.deviceId:
+            raise ValueError("deviceId mismatch with active calibration session")
+
+        # 시퀀스 넘버가 이전보다 작거나 같으면 안됨 -> 증가만 하면 OK
+        # TODO: 실제 시스템은 "연속성 체크 + gap 감지" 로 변경
         if (
             session.lastSequenceNumber is not None
             and request.sequenceNumber <= session.lastSequenceNumber
@@ -118,22 +131,8 @@ class CalibrationService:
         if updated_session is None:
             raise ValueError("failed to append calibration data")
 
-        step_window_counts = self.calibration_store.get_step_window_counts(
-            request.calibrationSessionId
-        )
-        if step_window_counts is None:
-            raise ValueError("failed to load step window counts")
+        return updated_session
 
-        return CalibrationDataResponse(
-            success=True,
-            message="calibration data appended",
-            data=CalibrationDataResponseData(
-                calibrationSessionId=updated_session.calibrationSessionId,
-                currentStep=updated_session.currentStep,
-                stepWindowCounts=step_window_counts,
-            ),
-        )
-    
     def finish_calibration(self,request: CalibrationFinishRequest,) -> CalibrationFinishResponse:
         session = self.calibration_store.get_session(request.calibrationSessionId)
         if session is None:
@@ -198,7 +197,7 @@ class CalibrationService:
                 completedAt=completed_session.completedAt,
             ),
         )
-        
+
     def _check_can_finish(self, step_counts: Dict[CalibrationStep, int]) -> bool:
         required_count = 5
         return all(count >= required_count for count in step_counts.values())
