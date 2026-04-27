@@ -37,7 +37,7 @@ def load_training_data() -> pd.DataFrame:
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(
             f"Training data not found: {DATA_PATH}\n"
-            "먼저 training/emg_features.csv 파일을 만들어야 합니다."
+            "먼저 training/emg_features.csv 파일 생성 필요"
         )
 
     df = pd.read_csv(DATA_PATH)
@@ -106,9 +106,8 @@ def train_model(df: pd.DataFrame) -> RandomForestClassifier:
 
 
 def save_model(model: RandomForestClassifier) -> None:
-    """
-    학습된 모델을 models/intent_model.pkl로 저장한다.
-    """
+    
+    # 학습된 모델을 models/intent_model.pkl로 저장
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
     with open(MODEL_PATH, "wb") as file:
