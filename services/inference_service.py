@@ -6,9 +6,14 @@ from schemas.stream_schema import InferenceResultSchema
 
 
 MODEL_PATH = "models/intent_model.pkl"
-MODEL_VERSION = "mock-v2"
+MODEL_VERSION = "mock-v3"
 
-VALID_INTENTS = {"LEFT", "RIGHT", "FORWARD", "BACKWARD", "STOP", "UNKNOWN"}
+# 현재 프로젝트에서 사용하는 intent 라벨
+# LEFT  : 왼쪽으로 고개 돌림
+# RIGHT : 오른쪽으로 고개 돌림
+# REST  : 힘 빼고 가만히 있음
+# STOP  : 힘줘서 멈춤
+VALID_INTENTS = {"LEFT", "RIGHT", "REST", "STOP", "UNKNOWN"}
 
 
 @lru_cache(maxsize=1)
@@ -36,17 +41,26 @@ def _mock_predict(feature_vector: list[float]) -> tuple[str, float]:
 
     max_score = max(channel_scores)
 
-    # 약한 신호는 STOP
+    # 전체 신호가 약하면 REST
+    # REST = 힘 빼고 가만히 있는 상태
     if max_score < 0.15:
-        return "STOP", round(max_score, 4)
+        return "REST", round(max_score, 4)
+
+    # 전체적으로 신호가 강하면 STOP으로 처리
+    # STOP = 특정 방향이 아니라 힘줘서 멈추는 상태
+    avg_score = sum(channel_scores) / len(channel_scores)
+
+    if avg_score >= 0.5:
+        return "STOP", round(min(avg_score, 1.0), 4)
 
     max_channel = channel_scores.index(max_score)
 
+    # 현재는 좌/우 고개 방향만 사용
+    # ch0이 가장 강하면 LEFT
+    # ch1이 가장 강하면 RIGHT
     intent_map = {
         0: "LEFT",
         1: "RIGHT",
-        2: "FORWARD",
-        3: "BACKWARD",
     }
 
     intent = intent_map.get(max_channel, "UNKNOWN")
