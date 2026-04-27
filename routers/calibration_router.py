@@ -1,15 +1,12 @@
 from fastapi import APIRouter, HTTPException
 
 from schemas.calibration_schema import *
-from services.calibration_service import CalibrationService
-from storage import calibration_store, device_mode_registry
+from services import calibration_service
 
 router = APIRouter(
     prefix="/ai/calibration",
     tags=["calibration"],
 )
-
-calibration_service = CalibrationService(calibration_store, device_mode_registry)
 
 
 @router.get("/ping")
