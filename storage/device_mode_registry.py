@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel
+from threading import Lock
 
 
 class DeviceMode(str, Enum):
@@ -43,48 +44,57 @@ class DeviceModeRegistry:
 
     def __init__(self):
         self._states: Dict[str, DeviceState] = {}
+        self._lock = Lock()
 
     def get(self, device_id: str) -> DeviceState:
-        return self._states.get(device_id) or DeviceState(deviceId=device_id)
+        with self._lock:
+            return self._states.get(device_id) or DeviceState(deviceId=device_id)
 
     def is_idle(self, device_id: str) -> bool:
-        return self.get(device_id).mode == DeviceMode.IDLE
+        with self._lock:
+            state = self._states.get(device_id) or DeviceState(deviceId=device_id)
+            return state.mode == DeviceMode.IDLE
 
     def set_calibration(
         self,
         device_id: str,
         calibration_session_id: str,
     ) -> DeviceState:
-        current = self.get(device_id)
-        if current.mode != DeviceMode.IDLE:
-            raise ValueError(
-                f"device {device_id} is busy in {current.mode.value} mode "
-                f"(activeId={current.activeId})"
+        
+        with self._lock:
+            current = self._states.get(device_id) or DeviceState(deviceId=device_id)
+
+            if current.mode != DeviceMode.IDLE:
+                raise ValueError(
+                    f"device {device_id} is busy in {current.mode.value} mode "
+                    f"(activeId={current.activeId})"
+                )
+            state = DeviceState(
+                deviceId=device_id,
+                mode=DeviceMode.CALIBRATION,
+                activeId=calibration_session_id,
+                lastActiveAt=_now_ms(),
             )
-        state = DeviceState(
-            deviceId=device_id,
-            mode=DeviceMode.CALIBRATION,
-            activeId=calibration_session_id,
-            lastActiveAt=_now_ms(),
-        )
-        self._states[device_id] = state
-        return state
+            self._states[device_id] = state
+            return state
 
     def set_session(self, device_id: str, session_id: str) -> DeviceState:
-        current = self.get(device_id)
-        if current.mode != DeviceMode.IDLE:
-            raise ValueError(
-                f"device {device_id} is busy in {current.mode.value} mode "
-                f"(activeId={current.activeId})"
+        with self._lock:
+            current = self._states.get(device_id) or DeviceState(deviceId=device_id)
+
+            if current.mode != DeviceMode.IDLE:
+                raise ValueError(
+                    f"device {device_id} is busy in {current.mode.value} mode "
+                    f"(activeId={current.activeId})"
+                )
+            state = DeviceState(
+                deviceId=device_id,
+                mode=DeviceMode.SESSION,
+                activeId=session_id,
+                lastActiveAt=_now_ms(),
             )
-        state = DeviceState(
-            deviceId=device_id,
-            mode=DeviceMode.SESSION,
-            activeId=session_id,
-            lastActiveAt=_now_ms(),
-        )
-        self._states[device_id] = state
-        return state
+            self._states[device_id] = state
+            return state
 
     def touch(self, device_id: str) -> None:
         """
@@ -92,12 +102,14 @@ class DeviceModeRegistry:
         StreamService 가 IDLE 이 아닌 모든 EMG 패킷에 대해 호출한다.
         IDLE 이라 _states 에 없는 device 는 no-op.
         """
-        state = self._states.get(device_id)
-        if state is not None:
-            state.lastActiveAt = _now_ms()
+        with self._lock:
+            state = self._states.get(device_id)
+            if state is not None:
+                state.lastActiveAt = _now_ms()
 
     def clear(self, device_id: str) -> None:
-        self._states.pop(device_id, None)
+        with self._lock:
+            self._states.pop(device_id, None)
 
     def sweep_stale(self, idle_threshold_ms: int) -> List[str]:
         """
@@ -105,18 +117,20 @@ class DeviceModeRegistry:
         반환값: 청소된 deviceId 목록 (로깅 용도).
         """
         now = _now_ms()
-        cleared: List[str] = []
-        # dict 순회 중 mutation 안전을 위해 list() 로 복제
-        for device_id, state in list(self._states.items()):
-            if state.lastActiveAt is None:
-                # 활동 시각이 없는 비정상 상태 → 즉시 정리
+        
+        
+        with self._lock:
+            stale_device_ids = [
+                device_id
+                for device_id, state in self._states.items()
+                if state.lastActiveAt is not None
+                and now - state.lastActiveAt > idle_threshold_ms
+            ]
+
+            for device_id in stale_device_ids:
                 self._states.pop(device_id, None)
-                cleared.append(device_id)
-                continue
-            if now - state.lastActiveAt > idle_threshold_ms:
-                self._states.pop(device_id, None)
-                cleared.append(device_id)
-        return cleared
+
+            return stale_device_ids
 
 
 def _now_ms() -> int:
