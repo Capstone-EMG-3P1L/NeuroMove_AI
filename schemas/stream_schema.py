@@ -4,8 +4,18 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator, model_valida
 
 # 공통 채널
 class EMGChannel(BaseModel):
-    channelIndex: int
-    samples: List[int]
+    model_config = ConfigDict(extra="forbid")
+
+    channelIndex: int = Field(..., ge=0)
+    samples: List[int] = Field(..., min_length=1)
+
+    @field_validator("samples")
+    @classmethod
+    def validate_samples(cls, samples: List[int]) -> List[int]:
+        for sample in samples:
+            if sample is None:
+                raise ValueError("samples must not contain null values")
+        return samples
 
 
 # =========================
@@ -16,12 +26,47 @@ class EMGChannel(BaseModel):
 # - 서버의 DeviceModeRegistry 가 deviceId 기준으로 현재 활성 모드를 판단해
 #   calibration_store 또는 session_store 로 라우팅하고, 둘 다 아니면 무시한다.
 class EmgWindowMessage(BaseModel):
-    deviceId: str
-    sequenceNumber: int
-    timestamp: int
-    samplingRate: int
-    windowSize: int
-    channels: List[EMGChannel]
+    model_config = ConfigDict(extra="forbid")
+
+    deviceId: str = Field(..., min_length=1, max_length=100)
+    sequenceNumber: int = Field(..., ge=0)
+    timestamp: int = Field(..., ge=0)
+    samplingRate: int = Field(..., gt=0, le=5000)
+    windowSize: int = Field(..., gt=0, le=5000)
+    channels: List[EMGChannel] = Field(..., min_length=1, max_length=16)
+
+    @field_validator("deviceId")
+    @classmethod
+    def validate_device_id(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("deviceId must not be blank")
+        return value
+
+    @field_validator("channels")
+    @classmethod
+    def validate_channels(cls, channels: List[EMGChannel]) -> List[EMGChannel]:
+        channel_indexes = [channel.channelIndex for channel in channels]
+
+        if len(channel_indexes) != len(set(channel_indexes)):
+            raise ValueError("channelIndex must be unique")
+
+        sample_lengths = [len(channel.samples) for channel in channels]
+        if len(set(sample_lengths)) != 1:
+            raise ValueError("all channels must have the same number of samples")
+
+        return channels
+
+    @model_validator(mode="after")
+    def validate_window_matches_samples(self):
+        actual_size = len(self.channels[0].samples)
+
+        if self.windowSize != actual_size:
+            raise ValueError(
+                f"windowSize({self.windowSize}) does not match actual sample size({actual_size})"
+            )
+
+        return self
 
 
 class EmgWindowAckData(BaseModel):
