@@ -188,3 +188,15 @@ def predict_intent(
         feature_vector=feature_vector,
         model_version=MODEL_VERSION,
     )
+
+"""
+TODO: calibration 기반 inference pipeline 연결
+- intent 라벨은 LEFT / RIGHT / REST / STOP만 사용(완료)
+
+- InferenceResultSchema, BackendInferenceSchema, BackendCommandSchema의 라벨 정책을 동일하게 맞춘다.
+- signal_processing / inference / signal_metric 함수는 calibration=None일 때 기존 방식으로 동작하고,
+   calibration이 있으면 baseline, activationThreshold, intentThresholds, fatigueBaseline, signalQuality를 반영한다.
+- stream_service에서 session.calibration을 꺼내 preprocess_channels(), predict_intent(),
+   calculate_signal_metrics()에 전달하도록 연결한다.
+- calibration baseline 값과 raw EMG sample의 스케일이 같은지 확인한다.
+"""
