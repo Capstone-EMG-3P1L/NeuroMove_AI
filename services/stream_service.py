@@ -17,7 +17,7 @@ SessionService / CalibrationService 안에서 일어나고, StreamService 는
 - 패킷 → 도메인 request 변환
 - 활성 device 의 lastActiveAt 갱신 (lock 누수 방어)
 - 도메인 ValueError → ack 변환
-네 가지만 담당한다.
+네 가지를 담당한다.
 """
 
 from typing import Optional
@@ -31,13 +31,23 @@ from schemas.stream_schema import (
     EmgWindowMessage,
     EmgWindowAck,
     EmgWindowAckData,
+    BackendInferenceSchema,
 )
 from services.calibration_service import CalibrationService
 from services.session_service import SessionService
+from services.signal_processing_service import preprocess_channels
+from services.feature_service import extract_feature_vector
+from services.inference_service import predict_intent
+from services.signal_metric_service import calculate_signal_metrics
 from storage.device_mode_registry import (
     DeviceModeRegistry,
     DeviceMode,
 )
+
+
+INFERENCE_MIN_WINDOW_COUNT = 5
+INFERENCE_WINDOW_COUNT = 5
+INFERENCE_INTERVAL = 5
 
 
 class StreamService:
@@ -55,7 +65,7 @@ class StreamService:
         state = self.device_mode_registry.get(msg.deviceId)
 
         if state.mode == DeviceMode.IDLE:
-            # calibration 도, session 도 진행 중이 아님 → 무시 (요건 4)
+            # calibration 도, session 도 진행 중이 아님 → 무시
             # IDLE 인 device 는 lock 자체가 없으므로 touch 하지 않는다.
             return EmgWindowAck(
                 success=True,
@@ -69,8 +79,7 @@ class StreamService:
                 ),
             )
 
-        # 활성 device 가 살아있다는 신호 → lock 누수 방어 sweeper 가 안 풀도록 갱신.
-        # (검증 실패해도 일단 device 자체는 살아있으므로 touch 한다.)
+        # 활성 device 가 살아있다는 신호 → lock 누수 방어 sweeper 가 안 풀도록 갱신
         self.device_mode_registry.touch(msg.deviceId)
 
         if state.mode == DeviceMode.CALIBRATION:
@@ -134,7 +143,7 @@ class StreamService:
             message="calibration window appended",
             data=EmgWindowAckData(
                 deviceId=msg.deviceId,
-                mode="CALIBRATION",
+                mode=DeviceMode.CALIBRATION,
                 activeId=calibration_session_id,
                 acceptedSequenceNumber=msg.sequenceNumber,
                 bufferedWindowCount=buffered,
@@ -183,18 +192,105 @@ class StreamService:
                 data=None,
             )
 
-        # TODO: 추론(inference) 트리거 위치.
-        #   - 추후 별도 inference 파이프라인이 붙으면 여기서 호출.
-        #   - 현재 단계에서는 buffer 누적만 수행.
+        inference_payload = self._run_inference_if_ready(
+            msg=msg,
+            session_id=session_id,
+            buffered_window_count=updated.bufferedWindowCount,
+        )
+
+        if inference_payload is not None:
+            self.session_service.update_last_intent(
+                session_id=session_id,
+                intent=inference_payload.intent,
+            )
+
+            # TODO: 백엔드 POST 연결 시 여기서 전송
+            # backend_client.send_intent(inference_payload)
+            print("Inference payload:", inference_payload.model_dump())
 
         return EmgWindowAck(
             success=True,
             message="session window appended",
             data=EmgWindowAckData(
                 deviceId=msg.deviceId,
-                mode="SESSION",
+                mode=DeviceMode.SESSION,
                 activeId=session_id,
                 acceptedSequenceNumber=msg.sequenceNumber,
                 bufferedWindowCount=updated.bufferedWindowCount,
             ),
         )
+
+    def _run_inference_if_ready(
+        self,
+        msg: EmgWindowMessage,
+        session_id: str,
+        buffered_window_count: int,
+    ) -> Optional[BackendInferenceSchema]:
+        # 최소 window 개수보다 적으면 아직 추론하지 않음
+        if buffered_window_count < INFERENCE_MIN_WINDOW_COUNT:
+            return None
+
+        # 매 window마다 추론하지 않고, 일정 간격마다 추론
+        if buffered_window_count % INFERENCE_INTERVAL != 0:
+            return None
+
+        session = self.session_service.get_session(session_id)
+
+        recent_windows = self.session_service.get_recent_windows(
+            session_id=session_id,
+            count=INFERENCE_WINDOW_COUNT,
+        )
+
+        if not recent_windows:
+            return None
+
+        merged_channels = self._merge_recent_windows_channels(recent_windows)
+
+        processed_channels = preprocess_channels(
+            channels=merged_channels,
+            calibration=session.calibration,
+        )
+
+        feature_vector = extract_feature_vector(processed_channels)
+
+        inference_result = predict_intent(
+            feature_vector=feature_vector,
+            calibration=session.calibration,
+        )
+
+        metrics = calculate_signal_metrics(
+            processed_channels=processed_channels,
+            calibration=session.calibration,
+        )
+
+        return BackendInferenceSchema(
+            sessionId=session.sessionId,
+            sequenceNumber=msg.sequenceNumber,
+            emgDeviceId=msg.deviceId,
+            timestamp=msg.timestamp,
+            intent=inference_result.predicted_intent,
+            confidence=inference_result.confidence,
+            fatigueScore=metrics["fatigueScore"],
+            signalQuality=metrics["signalQuality"],
+        )
+
+    def _merge_recent_windows_channels(
+        self,
+        windows: list[SessionWindow],
+    ) -> list[ChannelWindow]:
+        channel_samples: dict[int, list[int]] = {}
+
+        for window in windows:
+            for channel in window.channels:
+                if channel.channelIndex not in channel_samples:
+                    channel_samples[channel.channelIndex] = []
+
+                channel_samples[channel.channelIndex].extend(channel.samples)
+
+        return [
+            ChannelWindow(
+                channelIndex=channel_index,
+                samples=samples,
+            )
+            for channel_index, samples in sorted(channel_samples.items())
+        ]
