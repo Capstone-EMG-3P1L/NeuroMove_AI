@@ -1,6 +1,7 @@
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from storage.device_mode_registry import DeviceMode
 
 
 # 공통 채널
