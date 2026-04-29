@@ -33,6 +33,7 @@ from schemas.stream_schema import (
     EmgWindowAckData,
     BackendInferenceSchema,
 )
+from services.backend_service import BackendService
 from services.calibration_service import CalibrationService
 from services.session_service import SessionService
 from services.signal_processing_service import preprocess_channels
@@ -56,10 +57,12 @@ class StreamService:
         device_mode_registry: DeviceModeRegistry,
         calibration_service: CalibrationService,
         session_service: SessionService,
+        backend_service: BackendService,
     ):
         self.device_mode_registry = device_mode_registry
         self.calibration_service = calibration_service
         self.session_service = session_service
+        self.backend_service = backend_service
 
     def handle_emg_window(self, msg: EmgWindowMessage) -> EmgWindowAck:
         state = self.device_mode_registry.get(msg.deviceId)
@@ -204,9 +207,13 @@ class StreamService:
                 intent=inference_payload.intent,
             )
 
-            # TODO: 백엔드 POST 연결 시 여기서 전송
-            # backend_client.send_intent(inference_payload)
-            print("Inference payload:", inference_payload.model_dump())
+            try:
+                sent = self.backend_service.send_intent(inference_payload)
+                print("Backend intent sent:", sent)
+
+            except ValueError as e:
+                # 백엔드 전송 실패해도 WebSocket 수신 자체는 계속 유지
+                print(f"Failed to send inference result to backend: {e}")
 
         return EmgWindowAck(
             success=True,
