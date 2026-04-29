@@ -1,7 +1,7 @@
 import numpy as np
 
 
-MAX_SUPPORTED_CHANNELS = 16
+MAX_SUPPORTED_CHANNELS = 3
 
 
 def _get_channel_index(channel) -> int:
