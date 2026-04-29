@@ -21,8 +21,6 @@ FEATURE_COLUMNS = [
     "ch1_rms",
     "ch2_mav",
     "ch2_rms",
-    "ch3_mav",
-    "ch3_rms",
 ]
 
 # 정답 라벨 컬럼
@@ -106,7 +104,7 @@ def train_model(df: pd.DataFrame) -> RandomForestClassifier:
 
 
 def save_model(model: RandomForestClassifier) -> None:
-    
+
     # 학습된 모델을 models/intent_model.pkl로 저장
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
