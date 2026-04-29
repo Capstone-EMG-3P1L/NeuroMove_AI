@@ -72,6 +72,8 @@ class EmgWindowMessage(BaseModel):
 
 
 class EmgWindowAckData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     deviceId: str
     mode: DeviceMode
     activeId: Optional[str] = None
@@ -80,6 +82,8 @@ class EmgWindowAckData(BaseModel):
 
 
 class EmgWindowAck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     type: Literal["emg_window_ack"] = "emg_window_ack"
     success: bool
     message: str
@@ -87,10 +91,30 @@ class EmgWindowAck(BaseModel):
 
 
 # =========================
+# 내부 추론 결과 Schema
+# =========================
+class InferenceResultSchema(BaseModel):
+    """AI 모델 추론 결과를 내부 서비스 간 전달할 때 쓰는 schema."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    predicted_intent: Literal[
+        "LEFT",
+        "RIGHT",
+        "REST",
+        "STOP",
+    ]
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    feature_vector: List[float]
+    model_version: str
+
+
+# =========================
 # AI Server → Backend POST /api/ai/intent
 # =========================
 class BackendInferenceSchema(BaseModel):
     """추론 결과를 백엔드로 보낼 때 쓰는 request body."""
+
     model_config = ConfigDict(extra="forbid")
 
     sessionId: str = Field(..., min_length=1, max_length=100)
@@ -144,6 +168,7 @@ class BackendInferenceResponseDataSchema(BaseModel):
 
 class BackendInferenceResponseSchema(BaseModel):
     """백엔드의 POST /api/ai/intent 응답 파싱용."""
+
     model_config = ConfigDict(extra="forbid")
 
     success: bool
