@@ -5,10 +5,15 @@ click==8.1.8
 exceptiongroup==1.3.1
 fastapi==0.128.8
 h11==0.16.0
+httpx==0.28.1
 idna==3.11
 pydantic==2.12.5
 pydantic_core==2.41.5
+numpy==2.4.4
+pandas==3.0.2
+scikit-learn==1.8.0
 starlette==0.49.3
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.39.0
+websockets==16.0
