@@ -6,14 +6,22 @@ from schemas.stream_schema import InferenceResultSchema
 
 
 MODEL_PATH = "models/intent_model.pkl"
-MODEL_VERSION = "mock-v4"
+MODEL_VERSION = "mock-v5"
 
 # 현재 프로젝트에서 사용하는 intent 라벨
 # LEFT  : 왼쪽으로 고개 돌림
 # RIGHT : 오른쪽으로 고개 돌림
 # REST  : 힘 빼고 가만히 있음 / 알 수 없는 신호
-# STOP  : 힘줘서 멈춤
+# STOP  : 턱에 부착한 stop 전용 채널 활성
 VALID_INTENTS = {"LEFT", "RIGHT", "REST", "STOP"}
+
+# 3채널 기준 feature vector:
+# [ch0_mav, ch0_rms, ch1_mav, ch1_rms, ch2_mav, ch2_rms]
+STOP_CHANNEL_MAV_INDEX = 4
+STOP_CHANNEL_RMS_INDEX = 5
+
+# calibration에 STOP threshold가 없을 때 사용할 fallback 값
+DEFAULT_STOP_THRESHOLD = 0.5
 
 
 @lru_cache(maxsize=1)
@@ -74,6 +82,33 @@ def _is_below_activation_threshold(
     return activation_score < threshold
 
 
+def _is_stop_channel_active(
+    feature_vector: list[float],
+    calibration,
+) -> bool:
+    """
+    턱에 붙인 STOP 전용 채널이 활성화됐는지 확인한다.
+
+    3채널 기준 feature vector:
+    [ch0_mav, ch0_rms, ch1_mav, ch1_rms, ch2_mav, ch2_rms]
+
+    ch2가 STOP 전용 채널이므로 ch2_mav 또는 ch2_rms가
+    STOP threshold 이상이면 STOP으로 판단한다.
+    """
+    if len(feature_vector) <= STOP_CHANNEL_RMS_INDEX:
+        return False
+
+    stop_threshold = _get_intent_threshold(calibration, "STOP")
+
+    if stop_threshold is None:
+        stop_threshold = DEFAULT_STOP_THRESHOLD
+
+    stop_mav = feature_vector[STOP_CHANNEL_MAV_INDEX]
+    stop_rms = feature_vector[STOP_CHANNEL_RMS_INDEX]
+
+    return stop_mav >= stop_threshold or stop_rms >= stop_threshold
+
+
 def _apply_intent_threshold(
     intent: str,
     confidence: float,
@@ -102,6 +137,14 @@ def _mock_predict(
     if _is_below_activation_threshold(feature_vector, calibration):
         return "REST", 0.0
 
+    # STOP 전용 채널이 활성화되면 우선 STOP 처리
+    if _is_stop_channel_active(feature_vector, calibration):
+        stop_confidence = max(
+            feature_vector[STOP_CHANNEL_MAV_INDEX],
+            feature_vector[STOP_CHANNEL_RMS_INDEX],
+        )
+        return "STOP", round(min(stop_confidence, 1.0), 4)
+
     channel_scores = []
 
     # 채널별 MAV/RMS 평균 계산
@@ -110,29 +153,25 @@ def _mock_predict(
         rms = feature_vector[i + 1] if i + 1 < len(feature_vector) else 0.0
         channel_scores.append((mav + rms) / 2)
 
-    max_score = max(channel_scores)
+    # 방향 판단은 ch0, ch1만 사용
+    direction_scores = channel_scores[:2]
 
-    # 전체 신호가 약하면 REST
+    if not direction_scores:
+        return "REST", 0.0
+
+    max_score = max(direction_scores)
+
+    # 방향 신호가 약하면 REST
     if max_score < 0.15:
         return "REST", round(max_score, 4)
 
-    # 전체적으로 신호가 강하면 STOP으로 처리
-    avg_score = sum(channel_scores) / len(channel_scores)
+    max_channel = direction_scores.index(max_score)
 
-    if avg_score >= 0.5:
-        intent = "STOP"
-        confidence = round(min(avg_score, 1.0), 4)
-        return _apply_intent_threshold(intent, confidence, calibration)
-
-    max_channel = channel_scores.index(max_score)
-
-    # 현재는 좌/우 고개 방향만 사용
     intent_map = {
         0: "LEFT",
         1: "RIGHT",
     }
 
-    # 매핑되지 않는 채널이면 REST 처리
     intent = intent_map.get(max_channel, "REST")
     confidence = round(min(max_score, 1.0), 4)
 
@@ -150,6 +189,20 @@ def predict_intent(
             confidence=0.0,
             feature_vector=feature_vector,
             model_version="threshold-rule",
+        )
+
+    # STOP 전용 채널이 활성화되면 모델보다 우선해서 STOP 처리
+    if _is_stop_channel_active(feature_vector, calibration):
+        stop_confidence = max(
+            feature_vector[STOP_CHANNEL_MAV_INDEX],
+            feature_vector[STOP_CHANNEL_RMS_INDEX],
+        )
+
+        return InferenceResultSchema(
+            predicted_intent="STOP",
+            confidence=round(min(stop_confidence, 1.0), 4),
+            feature_vector=feature_vector,
+            model_version="stop-threshold-rule",
         )
 
     model = load_model()
@@ -188,15 +241,3 @@ def predict_intent(
         feature_vector=feature_vector,
         model_version=MODEL_VERSION,
     )
-
-"""
-TODO: calibration 기반 inference pipeline 연결
-- intent 라벨은 LEFT / RIGHT / REST / STOP만 사용(완료)
-
-- InferenceResultSchema, BackendInferenceSchema, BackendCommandSchema의 라벨 정책을 동일하게 맞춘다.
-- signal_processing / inference / signal_metric 함수는 calibration=None일 때 기존 방식으로 동작하고,
-   calibration이 있으면 baseline, activationThreshold, intentThresholds, fatigueBaseline, signalQuality를 반영한다.
-- stream_service에서 session.calibration을 꺼내 preprocess_channels(), predict_intent(),
-   calculate_signal_metrics()에 전달하도록 연결한다.
-- calibration baseline 값과 raw EMG sample의 스케일이 같은지 확인한다.
-"""
