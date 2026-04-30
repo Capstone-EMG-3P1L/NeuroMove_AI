@@ -165,13 +165,3 @@ class BackendInferenceResponseDataSchema(BaseModel):
     riskScore: float = Field(..., ge=0.0, le=1.0)
     command: Optional[BackendCommandSchema] = None
 
-
-class BackendInferenceResponseSchema(BaseModel):
-    """백엔드의 POST /api/ai/intent 응답 파싱용."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    success: bool
-    code: str = Field(..., min_length=1, max_length=100)
-    message: str = Field(..., min_length=1, max_length=500)
-    data: Optional[BackendInferenceResponseDataSchema] = None
