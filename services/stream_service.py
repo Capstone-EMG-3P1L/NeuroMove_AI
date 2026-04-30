@@ -195,25 +195,35 @@ class StreamService:
                 data=None,
             )
 
-        inference_payload = self._run_inference_if_ready(
-            msg=msg,
-            session_id=session_id,
-            buffered_window_count=updated.bufferedWindowCount,
-        )
-
-        if inference_payload is not None:
-            self.session_service.update_last_intent(
+        try:
+            inference_payload = self._run_inference_if_ready(
+                msg=msg,
                 session_id=session_id,
-                intent=inference_payload.intent,
+                buffered_window_count=updated.bufferedWindowCount,
             )
 
-            try:
+            if inference_payload is not None:
+                self.session_service.update_last_intent(
+                    session_id=session_id,
+                    intent=inference_payload.intent,
+                )
+
                 sent = self.backend_service.send_intent(inference_payload)
                 print("Backend intent sent:", sent)
 
-            except ValueError as e:
-                # 백엔드 전송 실패해도 WebSocket 수신 자체는 계속 유지
-                print(f"Failed to send inference result to backend: {e}")
+        except ValueError as e:
+            # 추론 / metric / 백엔드 전송 실패해도 WebSocket 수신 자체는 계속 유지
+            print(
+                f"Failed to process inference result "
+                f"(sessionId={session_id}, sequenceNumber={msg.sequenceNumber}): {e}"
+            )
+
+        except Exception as e:
+            # 예상하지 못한 에러도 ack 흐름을 끊지 않음
+            print(
+                f"Unexpected inference pipeline error "
+                f"(sessionId={session_id}, sequenceNumber={msg.sequenceNumber}): {e}"
+            )
 
         return EmgWindowAck(
             success=True,
