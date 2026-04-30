@@ -1,6 +1,5 @@
 import numpy as np
 
-
 MAX_SUPPORTED_CHANNELS = 3
 
 
@@ -14,7 +13,7 @@ def _get_channel_index(channel) -> int:
 
     # 둘 다 없으면 예외 발생
     if channel_index is None:
-        raise ValueError("channel index is missing")
+        raise ValueError("채널 인덱스가 없습니다")
 
     return channel_index
 
@@ -22,7 +21,7 @@ def _get_channel_index(channel) -> int:
 def _to_float_array(samples: list[int]) -> np.ndarray:
     # samples가 비어있으면 예외 발생
     if not samples:
-        raise ValueError("samples must not be empty")
+        raise ValueError("samples가 비어 있습니다")
 
     # numpy float 배열로 변환
     return np.array(samples, dtype=float)
@@ -32,28 +31,26 @@ def _get_baseline_stats(calibration, channel_index: int) -> tuple[float, float] 
     """
     channelIndex 기준으로 calibration baseline mean/std를 가져온다.
 
-    매핑 기준:
+    현재 센서 구성은 3채널 기준:
     channelIndex 0 -> ch1Mean / ch1Std
     channelIndex 1 -> ch2Mean / ch2Std
     channelIndex 2 -> ch3Mean / ch3Std
-    ...
-    channelIndex n -> ch{n+1}Mean / ch{n+1}Std
 
-    calibration이 없으면 None을 반환해서 기존 remove_dc_offset 방식으로 fallback한다.
-    calibration이 있는데 baseline 필드가 없으면 설정 불일치로 보고 예외를 발생시킨다.
+    calibration이 없으면 None을 반환해서 기존 remove_dc_offset 방식으로 fallback
+    calibration이 있는데 지원하지 않는 채널이거나 baseline 필드가 없으면 예외를 발생시킴
     """
     if calibration is None:
         return None
 
     baseline = getattr(calibration, "baseline", None)
     if baseline is None:
-        raise ValueError("calibration baseline is missing")
+        raise ValueError("calibration baseline 정보가 없습니다")
 
-    if channel_index < 0:
-        raise ValueError(f"invalid channel index: {channel_index}")
-
-    if channel_index >= MAX_SUPPORTED_CHANNELS:
-        raise ValueError(f"unsupported channel index: {channel_index}")
+    if channel_index < 0 or channel_index >= MAX_SUPPORTED_CHANNELS:
+        raise ValueError(
+            f"지원하지 않는 channelIndex입니다: {channel_index}. "
+            f"허용 범위는 0부터 {MAX_SUPPORTED_CHANNELS - 1}까지입니다"
+        )
 
     channel_number = channel_index + 1
     mean_field = f"ch{channel_number}Mean"
@@ -61,7 +58,7 @@ def _get_baseline_stats(calibration, channel_index: int) -> tuple[float, float] 
 
     if not hasattr(baseline, mean_field) or not hasattr(baseline, std_field):
         raise ValueError(
-            f"calibration baseline missing fields for channelIndex {channel_index}: "
+            f"channelIndex {channel_index}에 해당하는 calibration baseline 필드가 없습니다: "
             f"{mean_field}, {std_field}"
         )
 
@@ -70,7 +67,7 @@ def _get_baseline_stats(calibration, channel_index: int) -> tuple[float, float] 
 
     if mean_value is None or std_value is None:
         raise ValueError(
-            f"calibration baseline contains null value for channelIndex {channel_index}: "
+            f"channelIndex {channel_index}의 calibration baseline 값이 비어 있습니다: "
             f"{mean_field}, {std_field}"
         )
 
