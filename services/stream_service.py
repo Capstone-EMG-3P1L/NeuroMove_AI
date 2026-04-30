@@ -7,7 +7,7 @@ DeviceModeRegistry 의 mode 에 따라 calibration / session 으로 라우팅한
 흐름:
     ESP32 ──▶ /ai/stream/ws ──▶ StreamService.handle_emg_window
                                       │
-                                      ├─ IDLE         → drop (요건 4)
+                                      ├─ IDLE         → drop
                                       ├─ CALIBRATION  → CalibrationService.append_calibration_data
                                       └─ SESSION      → SessionService.append_window
 
@@ -15,11 +15,16 @@ DeviceModeRegistry 의 mode 에 따라 calibration / session 으로 라우팅한
 SessionService / CalibrationService 안에서 일어나고, StreamService 는
 - DeviceMode 라우팅
 - 패킷 → 도메인 request 변환
-- 활성 device 의 lastActiveAt 갱신 (lock 누수 방어)
+- 활성 device 의 lastActiveAt 갱신
 - 도메인 ValueError → ack 변환
-네 가지를 담당한다.
+- inference payload 생성
+- 백엔드 전송 queue 적재
+를 담당한다.
 """
 
+import time
+from queue import Empty, Full, Queue
+from threading import Thread
 from typing import Optional
 
 from schemas.calibration_schema import (
@@ -50,6 +55,10 @@ INFERENCE_MIN_WINDOW_COUNT = 5
 INFERENCE_WINDOW_COUNT = 5
 INFERENCE_INTERVAL = 5
 
+BACKEND_QUEUE_MAX_SIZE = 100
+BACKEND_SEND_RETRY_COUNT = 3
+BACKEND_SEND_RETRY_DELAY_SECONDS = 1
+
 
 class StreamService:
     def __init__(
@@ -64,12 +73,23 @@ class StreamService:
         self.session_service = session_service
         self.backend_service = backend_service
 
+        # 백엔드 전송은 stream ingest 경로를 막지 않도록 background queue에서 처리
+        self.backend_intent_queue: Queue[BackendInferenceSchema] = Queue(
+            maxsize=BACKEND_QUEUE_MAX_SIZE
+        )
+
+        self.backend_worker = Thread(
+            target=self._backend_intent_worker,
+            daemon=True,
+        )
+        self.backend_worker.start()
+
     def handle_emg_window(self, msg: EmgWindowMessage) -> EmgWindowAck:
         state = self.device_mode_registry.get(msg.deviceId)
 
         if state.mode == DeviceMode.IDLE:
-            # calibration 도, session 도 진행 중이 아님 → 무시
-            # IDLE 인 device 는 lock 자체가 없으므로 touch 하지 않는다.
+            # calibration도, session도 진행 중이 아님 → 무시
+            # IDLE인 device는 lock 자체가 없으므로 touch하지 않는다.
             return EmgWindowAck(
                 success=True,
                 message="device idle, dropped",
@@ -82,7 +102,7 @@ class StreamService:
                 ),
             )
 
-        # 활성 device 가 살아있다는 신호 → lock 누수 방어 sweeper 가 안 풀도록 갱신
+        # 활성 device가 살아있다는 신호 → lock 누수 방어 sweeper가 안 풀도록 갱신
         self.device_mode_registry.touch(msg.deviceId)
 
         if state.mode == DeviceMode.CALIBRATION:
@@ -137,9 +157,7 @@ class StreamService:
                 data=None,
             )
 
-        buffered = sum(
-            len(buf) for buf in updated.stepBuffers.values()
-        )
+        buffered = sum(len(buf) for buf in updated.stepBuffers.values())
 
         return EmgWindowAck(
             success=True,
@@ -208,11 +226,10 @@ class StreamService:
                     intent=inference_payload.intent,
                 )
 
-                sent = self.backend_service.send_intent(inference_payload)
-                print("Backend intent sent:", sent)
+                self._enqueue_backend_intent(inference_payload)
 
         except ValueError as e:
-            # 추론 / metric / 백엔드 전송 실패해도 WebSocket 수신 자체는 계속 유지
+            # 추론 / metric / queue 적재 실패해도 WebSocket 수신 자체는 계속 유지
             print(
                 f"Failed to process inference result "
                 f"(sessionId={session_id}, sequenceNumber={msg.sequenceNumber}): {e}"
@@ -290,6 +307,75 @@ class StreamService:
             fatigueScore=metrics["fatigueScore"],
             signalQuality=metrics["signalQuality"],
         )
+
+    def _enqueue_backend_intent(
+        self,
+        payload: BackendInferenceSchema,
+    ) -> None:
+        """
+        백엔드 전송 job을 queue에 적재한다.
+        stream/window ingest 경로가 막히지 않도록 put_nowait을 사용한다.
+        """
+        try:
+            self.backend_intent_queue.put_nowait(payload)
+
+        except Full:
+            # queue가 가득 찬 경우 stream ack를 막지 않고 해당 payload만 drop
+            print(
+                f"Backend intent queue is full. Dropped payload "
+                f"(sessionId={payload.sessionId}, sequenceNumber={payload.sequenceNumber})"
+            )
+
+    def _backend_intent_worker(self) -> None:
+        """
+        백그라운드에서 queue에 쌓인 inference payload를 백엔드로 전송한다.
+        전송 실패 시 retry하고, 최종 실패해도 stream ingest 경로에는 영향 주지 않는다.
+        """
+        while True:
+            try:
+                payload = self.backend_intent_queue.get(timeout=1.0)
+
+            except Empty:
+                continue
+
+            try:
+                self._send_backend_intent_with_retry(payload)
+
+            finally:
+                self.backend_intent_queue.task_done()
+
+    def _send_backend_intent_with_retry(
+        self,
+        payload: BackendInferenceSchema,
+    ) -> None:
+        for attempt in range(1, BACKEND_SEND_RETRY_COUNT + 1):
+            try:
+                sent = self.backend_service.send_intent(payload)
+                print(
+                    f"Backend intent sent: {sent} "
+                    f"(sessionId={payload.sessionId}, sequenceNumber={payload.sequenceNumber})"
+                )
+                return
+
+            except ValueError as e:
+                print(
+                    f"Failed to send intent to backend "
+                    f"(attempt={attempt}, sessionId={payload.sessionId}, "
+                    f"sequenceNumber={payload.sequenceNumber}): {e}"
+                )
+
+                if attempt < BACKEND_SEND_RETRY_COUNT:
+                    time.sleep(BACKEND_SEND_RETRY_DELAY_SECONDS)
+
+            except Exception as e:
+                print(
+                    f"Unexpected backend send error "
+                    f"(attempt={attempt}, sessionId={payload.sessionId}, "
+                    f"sequenceNumber={payload.sequenceNumber}): {e}"
+                )
+
+                if attempt < BACKEND_SEND_RETRY_COUNT:
+                    time.sleep(BACKEND_SEND_RETRY_DELAY_SECONDS)
 
     def _merge_recent_windows_channels(
         self,
