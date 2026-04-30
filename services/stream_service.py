@@ -314,17 +314,29 @@ class StreamService:
     ) -> None:
         """
         백엔드 전송 job을 queue에 적재한다.
-        stream/window ingest 경로가 막히지 않도록 put_nowait을 사용한다.
+        queue가 가득 차면 가장 오래된 payload를 버리고 최신 payload를 넣는다.
         """
         try:
             self.backend_intent_queue.put_nowait(payload)
-
         except Full:
-            # queue가 가득 찬 경우 stream ack를 막지 않고 해당 payload만 drop
-            print(
-                f"Backend intent queue is full. Dropped payload "
-                f"(sessionId={payload.sessionId}, sequenceNumber={payload.sequenceNumber})"
-            )
+            try:
+                dropped = self.backend_intent_queue.get_nowait()
+                self.backend_intent_queue.task_done()
+                print(
+                    f"Backend intent queue is full. Dropped oldest payload "
+                    f"(sessionId={dropped.sessionId}, sequenceNumber={dropped.sequenceNumber})" 
+                )
+            except Empty:
+                pass
+            try:
+                self.backend_intent_queue.put_nowait(payload)
+            except Full:
+            # 동시에 다른 producer가 넣어서 또 가득 찬 경우
+                print(
+                    f"Backend intent queue is still full. Dropped latest payload "
+                    f"(sessionId={payload.sessionId}, sequenceNumber={payload.sequenceNumber})"
+                )
+
 
     def _backend_intent_worker(self) -> None:
         """
