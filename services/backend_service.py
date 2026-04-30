@@ -1,7 +1,5 @@
 import os
-
 import httpx
-
 from schemas.stream_schema import BackendInferenceSchema
 
 
@@ -16,10 +14,7 @@ class BackendService:
         base_url: str | None = BACKEND_BASE_URL,
         internal_api_key: str = INTERNAL_API_KEY,
     ):
-        if not base_url:
-            raise ValueError("BACKEND_BASE_URL environment variable is required")
-
-        self.base_url = base_url.rstrip("/")
+        self.base_url = base_url.rstrip("/") if base_url else None
         self.internal_api_key = internal_api_key
 
     def send_intent(
@@ -27,6 +22,9 @@ class BackendService:
         payload: BackendInferenceSchema,
     ) -> bool:
         # AI 추론 결과를 백엔드로 전송
+        if not self.base_url:
+            raise ValueError("BACKEND_BASE_URL 환경변수가 설정되지 않았습니다")
+
         url = f"{self.base_url}{BACKEND_INTENT_ENDPOINT}"
 
         headers = {
@@ -43,13 +41,11 @@ class BackendService:
                 headers=headers,
                 timeout=10.0,
             )
-
             response.raise_for_status()
 
         except httpx.HTTPStatusError as e:
             raise ValueError(
-                f"backend returned error: "
-                f"status={e.response.status_code}, body={e.response.text}"
+                f"backend returned error: status={e.response.status_code}"
             )
 
         except httpx.RequestError as e:
