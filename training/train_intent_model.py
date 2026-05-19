@@ -33,6 +33,16 @@ LABEL_COLUMN = "label"
 # 허용하는 intent 라벨
 VALID_LABELS = {"LEFT", "RIGHT", "REST", "STOP"}
 
+# raw 데이터 라벨을 프로젝트 intent 라벨로 변환
+LABEL_MAP = {
+    "LEFT": "LEFT",
+    "RIGHT": "RIGHT",
+    "REST": "REST",
+    "STOP": "STOP",
+    "NEUTRAL": "REST",
+    "CLENCH": "STOP",
+}
+
 
 def load_training_data() -> pd.DataFrame:
     # 학습용 raw EMG 데이터 불러오기
@@ -72,6 +82,19 @@ def _calculate_rms(samples: np.ndarray) -> np.ndarray:
     return np.sqrt(np.mean(np.square(samples), axis=1))
 
 
+def _map_labels(labels: pd.Series) -> pd.Series:
+    # raw label을 프로젝트 intent 라벨로 변환
+    mapped_labels = labels.astype(str).str.upper().map(LABEL_MAP)
+
+    if mapped_labels.isnull().any():
+        invalid_raw_labels = set(
+            labels[mapped_labels.isnull()].astype(str).str.upper().unique()
+        )
+        raise ValueError(f"Invalid raw labels found: {invalid_raw_labels}")
+
+    return mapped_labels
+
+
 def extract_features_from_raw(df: pd.DataFrame) -> pd.DataFrame:
     # raw sample 컬럼을 MAV/RMS feature 컬럼으로 변환
     feature_df = pd.DataFrame()
@@ -83,8 +106,7 @@ def extract_features_from_raw(df: pd.DataFrame) -> pd.DataFrame:
         feature_df[f"ch{channel_index}_mav"] = _calculate_mav(samples)
         feature_df[f"ch{channel_index}_rms"] = _calculate_rms(samples)
 
-    # label은 대문자로 통일
-    feature_df[LABEL_COLUMN] = df[LABEL_COLUMN].astype(str).str.upper()
+    feature_df[LABEL_COLUMN] = _map_labels(df[LABEL_COLUMN])
 
     return feature_df
 
