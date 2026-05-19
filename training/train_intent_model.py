@@ -1,19 +1,23 @@
 import os
 import pickle
 
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
 
-# 학습 데이터 경로
+# raw EMG window 데이터 경로
 DATA_PATH = "training/emg_features.csv"
 
 # 학습된 모델 저장 경로
 MODEL_PATH = "models/intent_model.pkl"
 
-# 사용할 feature 컬럼
+# 사용할 채널 수
+CHANNEL_COUNT = 3
+
+# 최종 feature 컬럼
 FEATURE_COLUMNS = [
     "ch0_mav",
     "ch0_rms",
@@ -31,15 +35,58 @@ VALID_LABELS = {"LEFT", "RIGHT", "REST", "STOP"}
 
 
 def load_training_data() -> pd.DataFrame:
-    # 학습용 데이터 불러오기
+    # 학습용 raw EMG 데이터 불러오기
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(
             f"Training data not found: {DATA_PATH}\n"
             "먼저 training/emg_features.csv 파일 생성 필요"
         )
 
-    df = pd.read_csv(DATA_PATH)
-    return df
+    return pd.read_csv(DATA_PATH)
+
+
+def _get_channel_columns(df: pd.DataFrame, channel_index: int) -> list[str]:
+    prefix = f"ch{channel_index}_"
+
+    channel_columns = [
+        col for col in df.columns
+        if col.startswith(prefix)
+    ]
+
+    if not channel_columns:
+        raise ValueError(f"channel {channel_index} sample columns not found")
+
+    # ch0_0, ch0_1, ..., ch0_31 순서 보장
+    channel_columns.sort(key=lambda col: int(col.split("_")[1]))
+
+    return channel_columns
+
+
+def _calculate_mav(samples: np.ndarray) -> np.ndarray:
+    # window별 MAV 계산
+    return np.mean(np.abs(samples), axis=1)
+
+
+def _calculate_rms(samples: np.ndarray) -> np.ndarray:
+    # window별 RMS 계산
+    return np.sqrt(np.mean(np.square(samples), axis=1))
+
+
+def extract_features_from_raw(df: pd.DataFrame) -> pd.DataFrame:
+    # raw sample 컬럼을 MAV/RMS feature 컬럼으로 변환
+    feature_df = pd.DataFrame()
+
+    for channel_index in range(CHANNEL_COUNT):
+        channel_columns = _get_channel_columns(df, channel_index)
+        samples = df[channel_columns].to_numpy(dtype=float)
+
+        feature_df[f"ch{channel_index}_mav"] = _calculate_mav(samples)
+        feature_df[f"ch{channel_index}_rms"] = _calculate_rms(samples)
+
+    # label은 대문자로 통일
+    feature_df[LABEL_COLUMN] = df[LABEL_COLUMN].astype(str).str.upper()
+
+    return feature_df
 
 
 def validate_training_data(df: pd.DataFrame) -> None:
@@ -67,7 +114,6 @@ def validate_training_data(df: pd.DataFrame) -> None:
 
 
 def train_model(df: pd.DataFrame) -> RandomForestClassifier:
-
     # RandomForestClassifier 모델을 학습
     X = df[FEATURE_COLUMNS]
     y = df[LABEL_COLUMN]
@@ -104,7 +150,6 @@ def train_model(df: pd.DataFrame) -> RandomForestClassifier:
 
 
 def save_model(model: RandomForestClassifier) -> None:
-
     # 학습된 모델을 models/intent_model.pkl로 저장
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
@@ -115,10 +160,12 @@ def save_model(model: RandomForestClassifier) -> None:
 
 
 def main() -> None:
-    df = load_training_data()
-    validate_training_data(df)
+    raw_df = load_training_data()
 
-    model = train_model(df)
+    feature_df = extract_features_from_raw(raw_df)
+    validate_training_data(feature_df)
+
+    model = train_model(feature_df)
     save_model(model)
 
 
