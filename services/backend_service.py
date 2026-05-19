@@ -5,20 +5,20 @@ import httpx
 from schemas.stream_schema import BackendInferenceSchema
 
 
+BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL")
 BACKEND_INTENT_ENDPOINT = "/api/ai/intent"
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
 
 
 class BackendService:
     def __init__(
         self,
-        base_url: str | None = None,
-        internal_api_key: str | None = None,
+        base_url: str | None = BACKEND_BASE_URL,
+        internal_api_key: str = INTERNAL_API_KEY,
     ):
-        # env는 객체 생성 시점에 읽음
-        env_base_url = base_url or os.getenv("BACKEND_BASE_URL")
-        self.base_url = env_base_url.rstrip("/") if env_base_url else None
-
-        self.internal_api_key = internal_api_key or os.getenv("INTERNAL_API_KEY", "")
+        # import / 객체 생성 시점에는 환경변수가 없어도 앱 시작을 막지 않음
+        self.base_url = base_url.rstrip("/") if base_url else None
+        self.internal_api_key = internal_api_key
 
     def send_intent(
         self,
@@ -27,7 +27,6 @@ class BackendService:
         # 실제 백엔드 전송 시점에만 환경변수 검증
         if not self.base_url:
             raise ValueError("BACKEND_BASE_URL 환경변수가 설정되지 않았습니다")
-
         url = f"{self.base_url}{BACKEND_INTENT_ENDPOINT}"
 
         headers = {
@@ -56,5 +55,3 @@ class BackendService:
             raise ValueError(f"failed to connect backend: {str(e)}")
 
         return response.status_code == 200
-
-backend_service = BackendService()
