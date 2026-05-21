@@ -1,7 +1,11 @@
 import asyncio
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+# .env 파일에 있는 환경변수를 로드
+load_dotenv()
 
 from routers.session_router import router as session_router
 from routers.calibration_router import router as calibration_router
