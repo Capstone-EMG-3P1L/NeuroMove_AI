@@ -7,6 +7,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
+# [수정] 신호처리를 학습 전에 적용하기 위해 signal_processing_service import
+from services.signal_processing_service import remove_dc_offset, rectify_signal
+
 
 # raw EMG window 데이터 경로
 DATA_PATH = "training/emg_features.csv"
@@ -95,6 +98,22 @@ def _map_labels(labels: pd.Series) -> pd.Series:
     return mapped_labels
 
 
+def _preprocess_samples(samples: np.ndarray) -> np.ndarray:
+    """
+    [수정] 학습 데이터에도 실시간 추론과 동일한 신호처리를 적용
+    DC 제거(평균 제거) → 정류(절댓값) — 정규화는 하지 않음
+    각 row(window)별로 독립 처리
+    """
+    processed = np.zeros_like(samples)
+    for i in range(samples.shape[0]):
+        signal = samples[i]
+        signal = remove_dc_offset(signal)  # DC 제거
+        signal = rectify_signal(signal)    # 정류 (절댓값)
+        # 정규화는 하지 않음
+        processed[i] = signal
+    return processed
+
+
 def extract_features_from_raw(df: pd.DataFrame) -> pd.DataFrame:
     # raw sample 컬럼을 MAV/RMS feature 컬럼으로 변환
     feature_df = pd.DataFrame()
@@ -102,6 +121,9 @@ def extract_features_from_raw(df: pd.DataFrame) -> pd.DataFrame:
     for channel_index in range(CHANNEL_COUNT):
         channel_columns = _get_channel_columns(df, channel_index)
         samples = df[channel_columns].to_numpy(dtype=float)
+
+        # 신호처리(DC 제거 + 정류)를 먼저 적용한 뒤 feature 추출
+        samples = _preprocess_samples(samples)
 
         feature_df[f"ch{channel_index}_mav"] = _calculate_mav(samples)
         feature_df[f"ch{channel_index}_rms"] = _calculate_rms(samples)
