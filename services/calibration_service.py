@@ -158,7 +158,7 @@ class CalibrationService:
 
         completed_at = int(time.time() * 1000)
 
-        # [수정] 버퍼에 쌓인 raw 데이터를 신호처리(DC 제거 + 정류)한 뒤 실제 calibration 결과 계산
+        # 버퍼에 쌓인 raw 데이터를 신호처리(DC 제거 + 정류)한 뒤 실제 calibration 결과 계산
         result = self._compute_calibration_result(session)
 
         completed_session = self.calibration_store.save_result(
@@ -190,7 +190,7 @@ class CalibrationService:
         return all(count >= required_count for count in step_counts.values())
 
     # ──────────────────────────────────────────────
-    # [수정] 신호처리 기반 calibration 결과 계산
+    # 신호처리 기반 calibration 결과 계산
     # ──────────────────────────────────────────────
 
     def _collect_channel_samples(
@@ -213,7 +213,7 @@ class CalibrationService:
         baseline_std: float,
     ) -> np.ndarray:
         """
-        [수정] 세션 중 preprocess_channels가 하는 것과 동일한 처리
+        세션 중 preprocess_channels가 하는 것과 동일한 처리
         z-score 정규화(baseline 기준) → 정류 — 세션과 동일 스케일 보장
         """
         signal = raw_samples.astype(float)
@@ -230,7 +230,7 @@ class CalibrationService:
         baseline_stats: Dict[int, Dict[str, float]],
     ) -> float:
         """
-        [수정] step buffer 데이터를 z-score + 정류 처리한 뒤 평균 활성도 계산
+        step buffer 데이터를 z-score + 정류 처리한 뒤 평균 활성도 계산
         세션 중 추론 파이프라인과 동일한 스케일
         """
         if not buffers:
@@ -256,7 +256,7 @@ class CalibrationService:
         session: CalibrationSession,
     ) -> CalibrationResult:
         """
-        [수정] calibration 종료 시 신호처리된 데이터로 baseline / threshold 계산
+        calibration 종료 시 신호처리된 데이터로 baseline / threshold 계산
 
         처리 순서:
         1) REST raw 데이터에서 채널별 mean/std 추출 → baseline (세션 중 z-score 정규화 기준)

@@ -50,32 +50,37 @@ def calculate_signal_quality(
     processed_channels: dict[int, list[float]],
     calibration=None,
 ) -> float:
-
     """
     signalQuality 계산
-    현재 기준:
-    - mean + std로 현재 신호 품질 계산
-    - calibration.signalQuality가 있으면 기준 품질과 현재 품질을 함께 반영
-    - calibration ratio 계산 후 최종 결과만 0.0 ~ 1.0 범위로 제한
-    """
 
+    calibration 유무에 따라 분기 처리
+    - calibration 있음: 신호처리된 데이터의 mean+std 를 calibration 당시 기준값과 비교
+      → 비율이 1에 가까울수록 calibration 때와 동일한 품질
+    - calibration 없음: 채널별 변동계수(CV)로 신호 안정성 추정
+      → CV가 낮을수록(=신호가 안정적일수록) 높은 품질
+    """
     signal = _flatten_signals(processed_channels)
     mean_value = float(np.mean(signal))
     std_value = float(np.std(signal))
 
-    # calibration ratio 계산 전에 clamp하지 않고 raw 값을 유지
-    raw_current = mean_value + std_value
     calibration_quality = _get_calibration_signal_quality(calibration)
 
-    if calibration_quality is None or calibration_quality <= 0:
-        current_quality = _clamp_score(raw_current)
-        return round(current_quality, 4)
+    if calibration_quality is not None and calibration_quality > 0:
+        # calibration 기준값 대비 현재 신호 품질 비율
+        raw_current = mean_value + std_value
+        quality = raw_current / calibration_quality
+        quality = _clamp_score(quality)
+        return round(quality, 4)
 
-    # calibration 당시 품질과 현재 품질을 비교해서 보정
-    quality = raw_current / calibration_quality
-    # 최종 결과만 0~1 범위로 제한
-    quality = _clamp_score(quality)
+    # calibration 없을 때: 변동계수(CV) 기반 품질 추정
+    # mean이 0이면 신호 자체가 없으므로 품질 0
+    if mean_value <= 0:
+        return 0.0
 
+    cv = std_value / mean_value  # coefficient of variation
+    # CV가 0이면 완벽한 신호 → 1.0, CV가 클수록 품질 낮음
+    # CV=1 이상이면 품질 ≈ 0
+    quality = _clamp_score(1.0 - cv)
     return round(quality, 4)
 
 
@@ -86,26 +91,26 @@ def calculate_fatigue_score(
     """
     fatigueScore 계산
 
-    현재 기준:
-    - 전처리된 신호의 평균 활성도를 현재 fatigue 지표로 사용
-    - calibration.fatigueBaseline이 있으면 기준값 대비 비율로 계산
-    - 값은 0.0 ~ 1.0 범위로 반환
-
-    나중에 실제 EMG 데이터가 들어오면
-    MNF / MDF 같은 주파수 기반 피로도 지표로 교체 가능
+    calibration 유무에 따라 분기 처리
+    - calibration 있음: 현재 평균 활성도를 calibration 기준값과 비교
+      → 1에 가까우면 정상, 낮아지면 피로 누적
+    - calibration 없음: 원시 활성도를 그대로 0~1로 clamp
+      (calibration 없이는 절대 기준이 없으므로 참고용)
     """
     signal = _flatten_signals(processed_channels)
-
     current_fatigue = float(np.mean(signal))
+
     fatigue_baseline = _get_fatigue_baseline(calibration)
 
-    if fatigue_baseline is None or fatigue_baseline <= 0:
-        fatigue_score = current_fatigue
-    else:
+    if fatigue_baseline is not None and fatigue_baseline > 0:
+        # calibration 기준값 대비 비율
         fatigue_score = current_fatigue / fatigue_baseline
+        fatigue_score = _clamp_score(fatigue_score)
+        return round(fatigue_score, 4)
 
-    fatigue_score = _clamp_score(fatigue_score)
-
+    # calibration 없을 때: raw 값 자체가 클 수 있으므로
+    # 의미 있는 범위로 매핑 (신호처리 후 평균 활성도 기준)
+    fatigue_score = _clamp_score(current_fatigue)
     return round(fatigue_score, 4)
 
 
