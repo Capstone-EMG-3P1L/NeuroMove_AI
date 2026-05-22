@@ -118,7 +118,8 @@ def normalize_signal(signal: np.ndarray) -> np.ndarray:
 
 def preprocess_signal(
     samples: list[int],
-    normalize: bool = True,
+    # [수정] normalize 기본값을 False로 변경 — DC 제거 + 정류만 수행, 정규화는 하지 않음
+    normalize: bool = False,
     calibration=None,
     channel_index: int | None = None,
 ) -> list[float]:
@@ -145,7 +146,8 @@ def preprocess_signal(
 
 def preprocess_channels(
     channels,
-    normalize: bool = True,
+    # normalize 기본값을 False로 변경 — DC 제거 + 정류만 수행, 정규화는 하지 않음
+    normalize: bool = False,
     calibration=None,
 ) -> dict[int, list[float]]:
     # 채널별 전처리 결과 저장
