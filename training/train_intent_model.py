@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 
 import numpy as np
 import pandas as pd
@@ -7,12 +8,12 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
-# [수정] 신호처리를 학습 전에 적용하기 위해 signal_processing_service import
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from services.signal_processing_service import remove_dc_offset, rectify_signal
 
 
-# raw EMG window 데이터 경로
-DATA_PATH = "training/emg_features.csv"
+# raw EMG window 데이터 폴더 경로
+DATA_DIR = "training/data"
 
 # 학습된 모델 저장 경로
 MODEL_PATH = "models/intent_model.pkl"
@@ -48,14 +49,35 @@ LABEL_MAP = {
 
 
 def load_training_data() -> pd.DataFrame:
-    # 학습용 raw EMG 데이터 불러오기
-    if not os.path.exists(DATA_PATH):
+    # training/data 안의 모든 CSV 파일을 읽어서 하나로 합치기
+    if not os.path.isdir(DATA_DIR):
         raise FileNotFoundError(
-            f"Training data not found: {DATA_PATH}\n"
-            "먼저 training/emg_features.csv 파일 생성 필요"
+            f"Training data directory not found: {DATA_DIR}\n"
+            "먼저 training/data 디렉토리 생성 필요"
         )
 
-    return pd.read_csv(DATA_PATH)
+    csv_files = [
+        file for file in os.listdir(DATA_DIR)
+        if file.endswith(".csv")
+    ]
+
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV files found in: {DATA_DIR}")
+
+    df_list = []
+
+    for file in sorted(csv_files):
+        file_path = os.path.join(DATA_DIR, file)
+        df = pd.read_csv(file_path)
+        df_list.append(df)
+
+        print(f"Loaded: {file_path} ({len(df)} rows)")
+
+    merged_df = pd.concat(df_list, ignore_index=True)
+
+    print(f"Total training rows: {len(merged_df)}")
+
+    return merged_df
 
 
 def _get_channel_columns(df: pd.DataFrame, channel_index: int) -> list[str]:
@@ -100,17 +122,17 @@ def _map_labels(labels: pd.Series) -> pd.Series:
 
 def _preprocess_samples(samples: np.ndarray) -> np.ndarray:
     """
-    [수정] 학습 데이터에도 실시간 추론과 동일한 신호처리를 적용
-    DC 제거(평균 제거) → 정류(절댓값) — 정규화는 하지 않음
-    각 row(window)별로 독립 처리
+    학습 데이터에도 실시간 추론과 동일한 신호처리 적용
+    DC 제거 → 정류
     """
     processed = np.zeros_like(samples)
+
     for i in range(samples.shape[0]):
         signal = samples[i]
-        signal = remove_dc_offset(signal)  # DC 제거
-        signal = rectify_signal(signal)    # 정류 (절댓값)
-        # 정규화는 하지 않음
+        signal = remove_dc_offset(signal)
+        signal = rectify_signal(signal)
         processed[i] = signal
+
     return processed
 
 
