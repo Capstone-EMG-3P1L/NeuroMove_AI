@@ -123,13 +123,15 @@ def _map_labels(labels: pd.Series) -> pd.Series:
 def _preprocess_samples(samples: np.ndarray) -> np.ndarray:
     """
     학습 데이터에도 실시간 추론과 동일한 신호처리 적용
-    DC 제거 → 정류
+    정류만 적용
+    DC 제거는 절대 amplitude 차이를 보존하기 위해 적용하지 않음
     """
     processed = np.zeros_like(samples)
 
     for i in range(samples.shape[0]):
         signal = samples[i]
-        signal = remove_dc_offset(signal)
+        # DC 제거하지 않음
+        # signal = remove_dc_offset(signal)
         signal = rectify_signal(signal)
         processed[i] = signal
 
