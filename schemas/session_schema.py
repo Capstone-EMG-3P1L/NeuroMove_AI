@@ -13,7 +13,7 @@ class SessionStatus(str, Enum):
 
 class SessionStartRequest(BaseModel):
     sessionId: str
-    userId: int
+    userId: str
     deviceId: str
     profileId: str
     calibration: CalibrationResult
@@ -21,7 +21,7 @@ class SessionStartRequest(BaseModel):
 
 class SessionStartData(BaseModel):
     sessionId: str
-    userId: int
+    userId: str
     deviceId: str
     status: SessionStatus
     startedAt: int

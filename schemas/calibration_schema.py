@@ -26,14 +26,14 @@ class ChannelWindow(BaseModel):
 # Calibration 측정 시작
 class CalibrationStartRequest(BaseModel):
     calibrationSessionId: str
-    userId: int
+    userId: str
     deviceId: str
     initialStep: CalibrationStep = CalibrationStep.REST
 
 
 class CalibrationStartData(BaseModel):
     calibrationSessionId: str
-    userId: int
+    userId: str
     deviceId: str
     status: CalibrationStatus
     currentStep: CalibrationStep
@@ -115,7 +115,7 @@ class CalibrationFinishRequest(BaseModel):
 
 class CalibrationFinishData(BaseModel):
     calibrationSessionId: str
-    userId: int
+    userId: str
     deviceId: str
     result: CalibrationResult
     completedAt: int
