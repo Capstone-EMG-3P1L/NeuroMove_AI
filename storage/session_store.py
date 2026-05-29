@@ -14,7 +14,7 @@ DEFAULT_SESSION_BUFFER_MAXLEN = 200
 
 class Session(BaseModel):
     sessionId: str
-    userId: int
+    userId: str
     deviceId: str
     profileId: str
     calibration: CalibrationResult

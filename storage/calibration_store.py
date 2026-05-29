@@ -11,7 +11,7 @@ from schemas.calibration_schema import (
 
 class CalibrationSession(BaseModel):
     calibrationSessionId: str
-    userId: int
+    userId: str
     deviceId: str
     status: CalibrationStatus = CalibrationStatus.READY
     currentStep: CalibrationStep = CalibrationStep.REST
