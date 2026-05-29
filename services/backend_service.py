@@ -55,3 +55,6 @@ class BackendService:
             raise ValueError(f"failed to connect backend: {str(e)}")
 
         return response.status_code == 200
+
+# [수정] 싱글톤 인스턴스 생성 — services/__init__.py에서 import하여 사용
+backend_service = BackendService()

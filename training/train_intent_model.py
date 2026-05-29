@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 
 import numpy as np
 import pandas as pd
@@ -7,9 +8,11 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-# raw EMG window 데이터 경로
-DATA_PATH = "training/emg_features.csv"
+
+# raw EMG window 데이터 폴더 경로
+DATA_DIR = "training/data"
 
 # 학습된 모델 저장 경로
 MODEL_PATH = "models/intent_model.pkl"
@@ -45,14 +48,35 @@ LABEL_MAP = {
 
 
 def load_training_data() -> pd.DataFrame:
-    # 학습용 raw EMG 데이터 불러오기
-    if not os.path.exists(DATA_PATH):
+    # training/data 안의 모든 CSV 파일을 읽어서 하나로 합치기
+    if not os.path.isdir(DATA_DIR):
         raise FileNotFoundError(
-            f"Training data not found: {DATA_PATH}\n"
-            "먼저 training/emg_features.csv 파일 생성 필요"
+            f"Training data directory not found: {DATA_DIR}\n"
+            "먼저 training/data 디렉토리 생성 필요"
         )
 
-    return pd.read_csv(DATA_PATH)
+    csv_files = [
+        file for file in os.listdir(DATA_DIR)
+        if file.endswith(".csv")
+    ]
+
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV files found in: {DATA_DIR}")
+
+    df_list = []
+
+    for file in sorted(csv_files):
+        file_path = os.path.join(DATA_DIR, file)
+        df = pd.read_csv(file_path)
+        df_list.append(df)
+
+        print(f"Loaded: {file_path} ({len(df)} rows)")
+
+    merged_df = pd.concat(df_list, ignore_index=True)
+
+    print(f"Total training rows: {len(merged_df)}")
+
+    return merged_df
 
 
 def _get_channel_columns(df: pd.DataFrame, channel_index: int) -> list[str]:
@@ -95,13 +119,73 @@ def _map_labels(labels: pd.Series) -> pd.Series:
     return mapped_labels
 
 
+def _compute_rest_baseline(
+    df: pd.DataFrame,
+) -> dict[int, tuple[float, float]]:
+    """
+    [수정] REST 라벨 행에서 채널별 mean/std 계산 → 학습용 baseline
+    세션 추론 시 백엔드가 주는 calibration.baseline과 동일한 역할
+
+    학습: 이 함수로 REST baseline 계산 → z-score
+    추론: 백엔드가 준 calibration.baseline → apply_calibration_baseline → z-score
+    """
+    # REST 또는 NEUTRAL 라벨을 baseline으로 사용
+    rest_mask = df[LABEL_COLUMN].astype(str).str.upper().isin(["REST", "NEUTRAL"])
+    rest_df = df[rest_mask]
+
+    if rest_df.empty:
+        raise ValueError("REST 라벨 데이터가 없어서 baseline 계산 불가")
+
+    baseline = {}
+    for ch_idx in range(CHANNEL_COUNT):
+        ch_cols = _get_channel_columns(df, ch_idx)
+        rest_samples = rest_df[ch_cols].to_numpy(dtype=float).flatten()
+        baseline[ch_idx] = (float(np.mean(rest_samples)), float(np.std(rest_samples)))
+
+    return baseline
+
+
+def _apply_zscore_rectify(
+    samples: np.ndarray,
+    baseline_mean: float,
+    baseline_std: float,
+) -> np.ndarray:
+    """
+    [수정] calibration 기반 z-score + 정류
+    추론 시 signal_processing_service.apply_calibration_baseline + rectify_signal 과 동일한 처리
+
+    (sample - REST_mean) / REST_std → |result|
+    """
+    if baseline_std > 0:
+        processed = (samples - baseline_mean) / baseline_std
+    else:
+        processed = samples - baseline_mean
+
+    return np.abs(processed)
+
+
 def extract_features_from_raw(df: pd.DataFrame) -> pd.DataFrame:
-    # raw sample 컬럼을 MAV/RMS feature 컬럼으로 변환
+    """
+    [수정] REST baseline 기반 z-score + 정류 후 feature 추출
+    추론 파이프라인(calibration 기반 z-score)과 동일한 전처리
+    """
+    # 1. REST 행에서 채널별 baseline(mean/std) 계산
+    baseline = _compute_rest_baseline(df)
+
+    print("=== REST Baseline (학습용) ===")
+    for ch_idx, (mean, std) in baseline.items():
+        print(f"  ch{ch_idx}: mean={mean:.2f}, std={std:.2f}")
+    print()
+
     feature_df = pd.DataFrame()
 
     for channel_index in range(CHANNEL_COUNT):
         channel_columns = _get_channel_columns(df, channel_index)
         samples = df[channel_columns].to_numpy(dtype=float)
+
+        # [수정] REST baseline 기반 z-score + 정류
+        mean, std = baseline[channel_index]
+        samples = _apply_zscore_rectify(samples, mean, std)
 
         feature_df[f"ch{channel_index}_mav"] = _calculate_mav(samples)
         feature_df[f"ch{channel_index}_rms"] = _calculate_rms(samples)
