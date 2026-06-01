@@ -128,32 +128,32 @@ def build_emg_message(
 # (intent, window수, 설명, noise_multiplier, amplitude_scale)
 
 DEMO_SCENARIO = [
-    # ── 정상 운행 ──
+    # ── 정상 운행 (충분한 정상 구간) ──
     ("REST",  WINDOWS_PER_2SEC,  "정상 REST",       1.0, 1.0),
     ("LEFT",  WINDOWS_PER_2SEC,  "정상 LEFT 2초",   1.0, 1.0),
     ("REST",  3,                 "전환 REST",       1.0, 1.0),
     ("RIGHT", WINDOWS_PER_2SEC,  "정상 RIGHT 2초",  1.0, 1.0),
     ("REST",  3,                 "전환 REST",       1.0, 1.0),
     ("STOP",  WINDOWS_PER_2SEC,  "정상 STOP 2초",   1.0, 1.0),
-    ("REST",  3,                 "전환 REST",       1.0, 1.0),
+    ("REST",  WINDOWS_PER_2SEC,  "정상 REST 회복",  1.0, 1.0),
 
-    # ── 고위험 1: 피로도 점진 상승 ──
-    ("LEFT",  WINDOWS_PER_2SEC,  "피로 LEFT 70%",   1.0, 0.7),
-    ("REST",  2,                 "전환",            1.0, 1.0),
-    ("RIGHT", WINDOWS_PER_2SEC,  "피로 RIGHT 50%",  1.0, 0.5),
-    ("REST",  2,                 "전환",            1.0, 1.0),
-    ("LEFT",  WINDOWS_PER_2SEC,  "피로 LEFT 30%",   1.0, 0.3),
-    ("REST",  3,                 "회복 REST",       1.0, 1.0),
+    # ── 피로도 점진 상승 (완만하게) ──
+    ("LEFT",  WINDOWS_PER_2SEC,  "피로 LEFT 85%",   1.0, 0.85),
+    ("REST",  3,                 "전환",            1.0, 1.0),
+    ("RIGHT", WINDOWS_PER_2SEC,  "피로 RIGHT 70%",  1.0, 0.7),
+    ("REST",  WINDOWS_PER_2SEC,  "회복 REST",       1.0, 1.0),
+    ("LEFT",  WINDOWS_PER_2SEC,  "피로 LEFT 60%",   1.0, 0.6),
+    ("REST",  WINDOWS_PER_2SEC,  "회복 REST",       1.0, 1.0),
 
-    # ── 고위험 2: 신호 불안정 (노이즈 3배) ──
-    ("LEFT",  WINDOWS_PER_2SEC,  "불안정 LEFT",     3.0, 1.0),
-    ("REST",  2,                 "전환",            1.0, 1.0),
-    ("RIGHT", WINDOWS_PER_2SEC,  "불안정 RIGHT",    3.0, 1.0),
-    ("REST",  3,                 "안정 REST",       1.0, 1.0),
+    # ── 신호 불안정 (노이즈 적당히) ──
+    ("LEFT",  WINDOWS_PER_2SEC,  "불안정 LEFT",     1.8, 1.0),
+    ("REST",  WINDOWS_PER_2SEC,  "안정 REST",       1.0, 1.0),
+    ("RIGHT", WINDOWS_PER_2SEC,  "불안정 RIGHT",    1.8, 1.0),
+    ("REST",  WINDOWS_PER_2SEC,  "안정 REST",       1.0, 1.0),
 
-    # ── 고위험 3: 피로 + 노이즈 동시 ──
-    ("LEFT",  WINDOWS_PER_2SEC,  "최고위험 LEFT",   3.0, 0.3),
-    ("REST",  3,                 "회복 REST",       1.0, 1.0),
+    # ── 고위험 (피로 + 노이즈, 하지만 극단값 아님) ──
+    ("LEFT",  WINDOWS_PER_2SEC,  "고위험 LEFT",     1.5, 0.6),
+    ("REST",  WINDOWS_PER_2SEC,  "회복 REST",       1.0, 1.0),
 
     # ── 정상 복귀 ──
     ("LEFT",  WINDOWS_PER_2SEC,  "복귀 LEFT",       1.0, 1.0),
