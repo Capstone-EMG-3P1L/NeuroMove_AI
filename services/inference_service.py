@@ -21,7 +21,7 @@ STOP_CHANNEL_MAV_INDEX = 4
 STOP_CHANNEL_RMS_INDEX = 5
 
 # calibration에 STOP threshold가 없을 때 사용할 fallback 값
-DEFAULT_STOP_THRESHOLD = 0.5
+DEFAULT_STOP_THRESHOLD = 2.0
 
 
 @lru_cache(maxsize=1)
