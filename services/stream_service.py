@@ -365,7 +365,9 @@ class StreamService:
                 sent = self.backend_service.send_intent(payload)
                 print(
                     f"Backend intent sent: {sent} "
-                    f"(sessionId={payload.sessionId}, sequenceNumber={payload.sequenceNumber})"
+                    f"(sessionId={payload.sessionId}, seq={payload.sequenceNumber}, "
+                    f"intent={payload.intent}, confidence={payload.confidence}, "
+                    f"fatigue={payload.fatigueScore}, quality={payload.signalQuality})"
                 )
                 return
 
