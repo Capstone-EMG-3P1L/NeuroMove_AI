@@ -220,11 +220,11 @@ def predict_intent(
         else:
             confidence = 0.8
 
-        prediction, confidence = _apply_intent_threshold(
-            prediction,
-            confidence,
-            calibration,
-        )
+        # prediction, confidence = _apply_intent_threshold(
+        #     prediction,
+        #     confidence,
+        #     calibration,
+        # )
 
         return InferenceResultSchema(
             predicted_intent=prediction,
